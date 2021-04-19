@@ -1,0 +1,16 @@
+[package]
+name = "bevy_console"
+version = "0.1.0"
+edition = "2018"
+authors = ["RichoDemus <git@richodemus.com>"]
+homepage = "https://github.com/RichoDemus/bevy-console"
+repository = "https://github.com/RichoDemus/bevy-console"
+description = "dev console for bevy"
+license = "MIT"
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = "0.5.0"
+bevy_egui = "0.4.0"
