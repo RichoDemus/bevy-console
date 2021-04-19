@@ -1,6 +1,6 @@
 use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
-use bevy_egui::egui::{Align, ScrollArea};
+use bevy_egui::egui::{Align, ScrollArea, TextEdit};
 use bevy_egui::{egui, EguiContext, EguiPlugin};
 
 pub struct ConsolePlugin;
@@ -158,7 +158,8 @@ fn console_system(
             });
 
             ui.separator();
-            let response = ui.text_edit_singleline(&mut state.buf);
+            let text_edit = TextEdit::singleline(&mut state.buf).desired_width(config.width);
+            let response = ui.add(text_edit);
             if response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
                 if state.buf.is_empty() {
                     state.scrollback.push(String::new());
