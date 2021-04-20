@@ -74,7 +74,7 @@ pub enum ToggleConsoleKey {
 
 #[derive(Clone)]
 pub struct ConsoleConfiguration {
-    pub key: ToggleConsoleKey,
+    pub keys: Vec<ToggleConsoleKey>,
     pub left_pos: f32,
     pub top_pos: f32,
     pub height: f32,
@@ -85,7 +85,7 @@ pub struct ConsoleConfiguration {
 impl Default for ConsoleConfiguration {
     fn default() -> Self {
         Self {
-            key: ToggleConsoleKey::KeyCode(KeyCode::Grave),
+            keys: vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)],
             left_pos: 200.,
             top_pos: 100.,
             height: 400.,
@@ -120,15 +120,9 @@ fn console_system(
     for code in keyboard_input_events.iter() {
         let code: &KeyboardInput = code;
 
-        let is_right_key = match config.key {
-            ToggleConsoleKey::KeyCode(key) => match code.key_code {
-                None => false,
-                Some(pressed_key) => key == pressed_key,
-            },
-            ToggleConsoleKey::ScanCode(pressed_key) => code.scan_code == pressed_key,
-        };
+        let pressed = console_key_pressed(code, &config.keys);
 
-        if is_right_key && code.state.is_pressed() {
+        if pressed {
             state.show = !state.show;
         }
     }
@@ -203,9 +197,39 @@ fn receive_console_line(
     }
 }
 
+fn console_key_pressed(
+    keyboard_input: &KeyboardInput,
+    configured_keys: &Vec<ToggleConsoleKey>,
+) -> bool {
+    if !keyboard_input.state.is_pressed() {
+        return false;
+    }
+
+    for configured_key in configured_keys {
+        match configured_key {
+            ToggleConsoleKey::KeyCode(configured_key_code) => match keyboard_input.key_code {
+                None => continue,
+                Some(pressed_key) => {
+                    if configured_key_code == &pressed_key {
+                        return true;
+                    }
+                }
+            },
+            ToggleConsoleKey::ScanCode(configured_scan_code) => {
+                if &keyboard_input.scan_code == configured_scan_code {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::input::ElementState;
 
     #[test]
     fn parse_command() {
@@ -219,5 +243,75 @@ mod tests {
         let result: ConsoleCommandEntered = input.into();
 
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_console_key_pressed_scan_code() {
+        let input = KeyboardInput {
+            scan_code: 41,
+            key_code: None,
+            state: ElementState::Pressed,
+        };
+
+        let config = vec![ToggleConsoleKey::ScanCode(41)];
+
+        let result = console_key_pressed(&input, &config);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_console_wrong_key_pressed_scan_code() {
+        let input = KeyboardInput {
+            scan_code: 42,
+            key_code: None,
+            state: ElementState::Pressed,
+        };
+
+        let config = vec![ToggleConsoleKey::ScanCode(41)];
+
+        let result = console_key_pressed(&input, &config);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_console_key_pressed_key_code() {
+        let input = KeyboardInput {
+            scan_code: 0,
+            key_code: Some(KeyCode::Grave),
+            state: ElementState::Pressed,
+        };
+
+        let config = vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)];
+
+        let result = console_key_pressed(&input, &config);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_console_wrong_key_pressed_key_code() {
+        let input = KeyboardInput {
+            scan_code: 0,
+            key_code: Some(KeyCode::A),
+            state: ElementState::Pressed,
+        };
+
+        let config = vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)];
+
+        let result = console_key_pressed(&input, &config);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_console_key_right_key_but_not_pressed() {
+        let input = KeyboardInput {
+            scan_code: 0,
+            key_code: Some(KeyCode::Grave),
+            state: ElementState::Released,
+        };
+
+        let config = vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)];
+
+        let result = console_key_pressed(&input, &config);
+        assert!(!result);
     }
 }

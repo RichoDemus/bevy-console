@@ -35,4 +35,10 @@ fn write_to_console(
     console_line.send(PrintConsoleLine::new("Hello".to_string()));
 }
 ```
-There's more examples in the examples directory
+There's more examples in the examples directory, you'll need to enable the `examples` feature to run them though
+```
+cargo run --example basic_example --features examples
+```
+
+## wasm
+Should work in wasm, but you need to disable default features

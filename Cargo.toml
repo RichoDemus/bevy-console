@@ -1,6 +1,6 @@
 [package]
 name = "bevy_console"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2018"
 authors = ["RichoDemus <git@richodemus.com>"]
 homepage = "https://github.com/RichoDemus/bevy-console"
@@ -11,6 +11,15 @@ readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+examples = [
+    "bevy/bevy_gltf",
+    "bevy/bevy_winit",
+    "bevy/render",
+    "bevy/png",
+    "bevy/bevy_wgpu",
+]
+
 [dependencies]
-bevy = "0.5.0"
 bevy_egui = "0.4.0"
+bevy = { version = "0.5.0", default-features = false }

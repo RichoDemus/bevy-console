@@ -6,7 +6,10 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(ConsolePlugin)
         .insert_resource(ConsoleConfiguration {
-            key: ToggleConsoleKey::ScanCode(41), // this is the console key on a swedish keyboard
+            keys: vec![
+                ToggleConsoleKey::ScanCode(41), // this is the console key on a swedish keyboard
+                ToggleConsoleKey::KeyCode(KeyCode::Grave), // US console key
+            ],
             ..Default::default()
         })
         .run();
