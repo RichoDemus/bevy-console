@@ -141,15 +141,17 @@ fn console_system(
         .show(egui_context.ctx(), |ui| {
             ui.set_min_height(config.height);
             ui.set_min_width(config.width);
-            ScrollArea::new([false, false]).show(ui, |ui| {
-                ui.vertical(|ui| {
-                    ui.set_min_height(scroll_height);
-                    for line in &state.scrollback {
-                        ui.label(line);
-                    }
+            ScrollArea::vertical()
+                .max_height(scroll_height)
+                .show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        ui.set_min_height(scroll_height);
+                        for line in &state.scrollback {
+                            ui.label(line);
+                        }
+                    });
+                    ui.scroll_to_cursor(Align::BOTTOM);
                 });
-                ui.scroll_to_cursor(Align::BOTTOM);
-            });
 
             ui.separator();
             let text_edit = TextEdit::singleline(&mut state.buf).desired_width(config.width);
