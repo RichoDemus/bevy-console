@@ -6,7 +6,7 @@ use bevy_egui::{egui, EguiContext, EguiPlugin};
 pub struct ConsolePlugin;
 
 impl Plugin for ConsolePlugin {
-    fn build(&self, app: &mut AppBuilder) {
+    fn build(&self, app: &mut App) {
         app.insert_resource(ConsoleState::default());
         app.add_event::<ConsoleCommandEntered>();
         app.add_event::<PrintConsoleLine>();
@@ -141,7 +141,7 @@ fn console_system(
         .show(egui_context.ctx(), |ui| {
             ui.set_min_height(config.height);
             ui.set_min_width(config.width);
-            ScrollArea::from_max_height(scroll_height).show(ui, |ui| {
+            ScrollArea::new([false, false]).show(ui, |ui| {
                 ui.vertical(|ui| {
                     ui.set_min_height(scroll_height);
                     for line in &state.scrollback {

@@ -17,9 +17,8 @@ examples = [
     "bevy/bevy_winit",
     "bevy/render",
     "bevy/png",
-    "bevy/bevy_wgpu",
 ]
 
 [dependencies]
 bevy_egui = "0"
-bevy = { version = "0.5.0", default-features = false }
+bevy = { version = "0.6.0", default-features = false }
