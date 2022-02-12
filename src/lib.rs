@@ -112,7 +112,7 @@ impl HelpCommand {
 // todo dont close console if typing, maybe?
 fn console_system(
     mut keyboard_input_events: EventReader<KeyboardInput>,
-    egui_context: Res<EguiContext>,
+    mut egui_context: ResMut<EguiContext>,
     mut state: ResMut<ConsoleState>,
     config: Res<ConsoleConfiguration>,
     mut command_entered: EventWriter<ConsoleCommandEntered>,
@@ -138,7 +138,7 @@ fn console_system(
                 config.top_pos + config.height,
             ),
         ))
-        .show(egui_context.ctx(), |ui| {
+        .show(egui_context.ctx_mut(), |ui| {
             ui.set_min_height(config.height);
             ui.set_min_width(config.width);
             ScrollArea::vertical()
