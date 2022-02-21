@@ -1,6 +1,6 @@
 [package]
 name = "bevy_console"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 authors = ["RichoDemus <git@richodemus.com>"]
 homepage = "https://github.com/RichoDemus/bevy-console"
@@ -21,4 +21,4 @@ examples = [
 
 [dependencies]
 bevy_egui = "0"
-bevy = { version = "0.6.0", default-features = false }
+bevy = { version = "0.6.1", default-features = false }
