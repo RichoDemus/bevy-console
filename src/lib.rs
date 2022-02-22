@@ -6,10 +6,10 @@ use bevy_egui::EguiPlugin;
 pub use crate::command_result::{CommandResult, IntoCommandResult};
 use crate::console::{console_config, console_system, receive_console_line, ConsoleState};
 pub use crate::console::{
-    CommandArgs, CommandName, ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration,
-    HelpCommand, PrintConsoleLine, ToggleConsoleKey,
+    CommandArgInfo, CommandArgs, CommandHelp, CommandInfo, CommandName, ConsoleCommand,
+    ConsoleCommandEntered, ConsoleConfiguration, HelpCommand, PrintConsoleLine, ToggleConsoleKey,
 };
-pub use crate::value::{FromValue, FromValueError, RunWithValues, ValueType};
+pub use crate::value::{FromValue, FromValueError, ValueType};
 
 mod command_result;
 mod console;
@@ -30,6 +30,7 @@ impl Plugin for ConsolePlugin {
     }
 }
 
+/// Reply with the [`format!`] syntax.
 #[macro_export]
 macro_rules! reply {
     ($cmd: ident, $fmt: literal$(, $($arg:expr),* $(,)?)?) => {
@@ -40,24 +41,24 @@ macro_rules! reply {
     };
 }
 
+/// Reply with the [`format!`] syntax followed by [ok].
 #[macro_export]
 macro_rules! reply_ok {
     ($cmd: ident, $fmt: literal$(, $($arg:expr),* $(,)?)?) => {
         {
             let msg = format!($fmt$(, $($arg),*)?);
-            $cmd.reply(msg);
-            $cmd.ok();
+            $cmd.reply_ok(msg);
         }
     };
 }
 
+/// Reply with the [`format!`] syntax followed by [failed].
 #[macro_export]
 macro_rules! reply_fail {
     ($cmd: ident, $fmt: literal$(, $($arg:expr),* $(,)?)?) => {
         {
             let msg = format!($fmt$(, $($arg),*)?);
-            $cmd.reply(msg);
-            $cmd.fail();
+            $cmd.reply_failed(msg);
         }
     };
 }

@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use std::{fmt::Write, mem};
 
 use bevy::{
     app::{EventReaderState, EventWriterState, Events},
@@ -11,7 +12,7 @@ use bevy::{
 };
 use bevy_console_parser::{parse_console_command, ValueRawOwned};
 use bevy_egui::{
-    egui::{self, Align, ScrollArea, TextEdit},
+    egui::{self, Align, RichText, ScrollArea, TextEdit},
     EguiContext,
 };
 
@@ -25,32 +26,182 @@ pub trait CommandArgs: Sized {
     fn from_values(values: &[ValueRawOwned]) -> Result<Self, FromValueError>;
 }
 
+pub trait CommandHelp: CommandName {
+    fn command_help() -> Option<CommandInfo> {
+        None
+    }
+
+    fn help_text() -> Option<String> {
+        #[allow(unused_must_use)]
+        Self::command_help().map(|command_info| {
+            let mut buf = "Usage:\n\n".to_string();
+
+            write!(buf, "  > {}", Self::command_name());
+            for CommandArgInfo { name, optional, .. } in &command_info.args {
+                write!(buf, " ");
+                if *optional {
+                    write!(buf, "[");
+                } else {
+                    write!(buf, "<");
+                }
+                write!(buf, "{name}");
+                if *optional {
+                    write!(buf, "]");
+                } else {
+                    write!(buf, ">");
+                }
+            }
+            writeln!(buf);
+            writeln!(buf);
+
+            if let Some(mut description) = command_info.description {
+                description = description
+                    .split('\n')
+                    .map(|line| {
+                        let leading_whitespace = line.len() - line.trim_start().len();
+                        if leading_whitespace < 2 {
+                            format!("{}{line}", " ".repeat(2 - leading_whitespace))
+                        } else {
+                            line.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                writeln!(buf, "{description}");
+                writeln!(buf);
+            }
+
+            let longest_arg_name = command_info
+                .args
+                .iter()
+                .map(|arg| arg.name.len())
+                .max()
+                .unwrap_or(0);
+            let longest_arg_ty = command_info
+                .args
+                .iter()
+                .map(|arg| arg.ty.len())
+                .max()
+                .unwrap_or(0);
+            for CommandArgInfo {
+                name,
+                ty,
+                description,
+                optional,
+            } in &command_info.args
+            {
+                write!(
+                    buf,
+                    "    {name} {}",
+                    " ".repeat(longest_arg_name - name.len())
+                );
+                if *optional {
+                    write!(buf, "[");
+                } else {
+                    write!(buf, "<");
+                }
+                write!(buf, "{ty}");
+                if *optional {
+                    write!(buf, "]");
+                } else {
+                    write!(buf, ">");
+                }
+                write!(buf, "{}", " ".repeat(longest_arg_ty - ty.len()));
+
+                match description {
+                    Some(description) => {
+                        writeln!(buf, "   - {description}");
+                    }
+                    None => {
+                        writeln!(buf);
+                    }
+                }
+            }
+
+            buf
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CommandInfo {
+    pub description: Option<String>,
+    pub args: Vec<CommandArgInfo>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CommandArgInfo {
+    pub name: String,
+    pub ty: String,
+    pub description: Option<String>,
+    pub optional: bool,
+}
+
+/// Executed parsed console command.
+///
+/// Used to capture console commands which implement [`CommandName`], [`CommandArgs`] & [`CommandHelp`].
+/// These can be easily implemented with the [`ConsoleCommand`](bevy_console_derive::ConsoleCommand) derive macro.
+///
+/// # Example
+///
+/// ```rust
+/// /// Prints given arguments to the console
+/// #[derive(ConsoleCommand)]
+/// #[console_command(name = "log")]
+/// struct LogCommand {
+///     /// Message to print
+///     msg: String,
+///     /// Number of times to print message
+///     num: Option<i64>,
+/// }
+///
+/// fn log_command(mut log: ConsoleCommand<LogCommand>) {
+///     if let Some(LogCommand { msg, num }) = log.take() {
+///         log.ok();
+///     }
+/// }
+/// ```
 pub struct ConsoleCommand<'w, 's, T> {
     command: Option<T>,
     console_line: EventWriter<'w, 's, PrintConsoleLine>,
 }
 
 impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
-    pub fn single(&self) -> Option<&T> {
-        self.command.as_ref()
+    /// Returns Some(T) if the command was executed and arguments were valid.
+    ///
+    /// This method should only be called once.
+    /// Consecutive calls will return None regardless if the command occured.
+    pub fn take(&mut self) -> Option<T> {
+        mem::take(&mut self.command)
     }
 
-    pub fn into_single(self) -> Option<T> {
-        self.command
-    }
-
-    pub fn reply(&mut self, msg: impl Into<String>) {
-        self.console_line.send(PrintConsoleLine::new(msg.into()));
-    }
-
+    /// Print [ok] in the console.
     pub fn ok(&mut self) {
         self.console_line
             .send(PrintConsoleLine::new("[ok]".to_string()));
     }
 
+    /// Print [failed] in the console.
     pub fn failed(&mut self) {
         self.console_line
             .send(PrintConsoleLine::new("[failed]".to_string()));
+    }
+
+    /// Print a reply in the console.
+    pub fn reply(&mut self, msg: impl Into<String>) {
+        self.console_line.send(PrintConsoleLine::new(msg.into()));
+    }
+
+    /// Print a reply in the console followed by [ok].
+    pub fn reply_ok(&mut self, msg: impl Into<String>) {
+        self.console_line.send(PrintConsoleLine::new(msg.into()));
+        self.ok();
+    }
+
+    /// Print a reply in the console followed by [failed].
+    pub fn reply_failed(&mut self, msg: impl Into<String>) {
+        self.console_line.send(PrintConsoleLine::new(msg.into()));
+        self.failed();
     }
 }
 
@@ -67,7 +218,9 @@ pub struct ConsoleCommandState<T> {
     marker: PhantomData<T>,
 }
 
-impl<'w, 's, T: Resource + CommandName + CommandArgs> SystemParam for ConsoleCommand<'w, 's, T> {
+impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParam
+    for ConsoleCommand<'w, 's, T>
+{
     type Fetch = ConsoleCommandState<T>;
 }
 
@@ -75,18 +228,8 @@ unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
     type Config = ();
 
     fn init(world: &mut World, system_meta: &mut SystemMeta, _config: Self::Config) -> Self {
-        let event_reader = EventReaderState::<
-            (
-                <Local<'s, (usize, PhantomData<ConsoleCommandEntered>)> as SystemParam>::Fetch,
-                <Res<'w, Events<ConsoleCommandEntered>> as SystemParam>::Fetch,
-            ),
-            ConsoleCommandEntered,
-        >::init(world, system_meta, (None, ()));
-
-        let console_line = EventWriterState::<
-            (<ResMut<'w, Events<PrintConsoleLine>> as SystemParam>::Fetch,),
-            PrintConsoleLine,
-        >::init(world, system_meta, ((),));
+        let event_reader = EventReaderState::init(world, system_meta, (None, ()));
+        let console_line = EventWriterState::init(world, system_meta, ((),));
 
         ConsoleCommandState {
             event_reader,
@@ -98,7 +241,7 @@ unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
     fn default_config() {}
 }
 
-impl<'w, 's, T: Resource + CommandName + CommandArgs> SystemParamFetch<'w, 's>
+impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamFetch<'w, 's>
     for ConsoleCommandState<T>
 {
     type Item = ConsoleCommand<'w, 's, T>;
@@ -111,19 +254,9 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs> SystemParamFetch<'w, 's>
         change_tick: u32,
     ) -> Self::Item {
         let mut event_reader =
-            EventReaderState::<
-                (
-                    <Local<'s, (usize, PhantomData<ConsoleCommandEntered>)> as SystemParam>::Fetch,
-                    <Res<'w, Events<ConsoleCommandEntered>> as SystemParam>::Fetch,
-                ),
-                ConsoleCommandEntered,
-            >::get_param(&mut state.event_reader, system_meta, world, change_tick);
-
+            EventReaderState::get_param(&mut state.event_reader, system_meta, world, change_tick);
         let mut console_line =
-            EventWriterState::<
-                (<ResMut<'w, Events<PrintConsoleLine>> as SystemParam>::Fetch,),
-                PrintConsoleLine,
-            >::get_param(&mut state.console_line, system_meta, world, change_tick);
+            EventWriterState::get_param(&mut state.console_line, system_meta, world, change_tick);
 
         let command = event_reader
             .iter()
@@ -133,6 +266,9 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs> SystemParamFetch<'w, 's>
                 Ok(value) => Some(value),
                 Err(err) => {
                     console_line.send(PrintConsoleLine::new(err.to_string()));
+                    if let Some(help_text) = T::help_text() {
+                        console_line.send(PrintConsoleLine::new(help_text));
+                    }
                     None
                 }
             });
@@ -255,14 +391,16 @@ pub(crate) fn console_system(
                     ui.vertical(|ui| {
                         ui.set_min_height(scroll_height);
                         for line in &state.scrollback {
-                            ui.label(line);
+                            ui.label(RichText::new(line).monospace());
                         }
                     });
                     ui.scroll_to_cursor(Align::BOTTOM);
                 });
 
             ui.separator();
-            let text_edit = TextEdit::singleline(&mut state.buf).desired_width(config.width);
+            let text_edit = TextEdit::singleline(&mut state.buf)
+                .desired_width(config.width)
+                .text_style(egui::TextStyle::Monospace);
             let response = ui.add(text_edit);
             if response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
                 if state.buf.is_empty() {

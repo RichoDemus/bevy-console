@@ -7,7 +7,7 @@ homepage = "https://github.com/RichoDemus/bevy-console"
 repository = "https://github.com/RichoDemus/bevy-console"
 description = "console command parser for bevy_console"
 license = "MIT"
-readme = "README.md"
+readme = "../README.md"
 
 [dependencies]
 nom = "7.1"

@@ -1,6 +1,5 @@
 use std::fmt;
 
-use bevy::prelude::IntoSystem;
 use bevy_console_parser::{Value, ValueRawOwned};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -74,8 +73,6 @@ impl<'a> FromValue<'a> for ValueRawOwned {
     }
 }
 
-use crate::IntoCommandResult;
-
 macro_rules! unexpected_arg_type {
     ($expected: ident, $received: ident, $arg_num: ident) => {
         FromValueError::UnexpectedArgType {
@@ -97,16 +94,33 @@ impl FromValue<'_> for String {
     }
 }
 
-impl FromValue<'_> for i64 {
-    fn from_value(value: &ValueRawOwned, arg_num: u8) -> Result<Self, FromValueError> {
-        match value {
-            ValueRawOwned::String(_) => Err(unexpected_arg_type!(Int, String, arg_num)),
-            ValueRawOwned::Int(num, _) => Ok(*num),
-            ValueRawOwned::Float(_, _) => Err(unexpected_arg_type!(Int, Float, arg_num)),
-            ValueRawOwned::Bool(_, _) => Err(unexpected_arg_type!(Int, Bool, arg_num)),
+macro_rules! impl_from_int_value {
+    ($ty: ty) => {
+        impl FromValue<'_> for $ty {
+            fn from_value(value: &ValueRawOwned, arg_num: u8) -> Result<Self, FromValueError> {
+                match value {
+                    ValueRawOwned::String(_) => Err(unexpected_arg_type!(Int, String, arg_num)),
+                    ValueRawOwned::Int(num, _) => Ok(*num as $ty),
+                    ValueRawOwned::Float(_, _) => Err(unexpected_arg_type!(Int, Float, arg_num)),
+                    ValueRawOwned::Bool(_, _) => Err(unexpected_arg_type!(Int, Bool, arg_num)),
+                }
+            }
         }
-    }
+    };
 }
+
+impl_from_int_value!(i8);
+impl_from_int_value!(i16);
+impl_from_int_value!(i32);
+impl_from_int_value!(i64);
+impl_from_int_value!(i128);
+impl_from_int_value!(isize);
+impl_from_int_value!(u8);
+impl_from_int_value!(u16);
+impl_from_int_value!(u32);
+impl_from_int_value!(u64);
+impl_from_int_value!(u128);
+impl_from_int_value!(usize);
 
 impl FromValue<'_> for f64 {
     fn from_value(value: &ValueRawOwned, arg_num: u8) -> Result<Self, FromValueError> {
@@ -148,56 +162,3 @@ where
             .transpose()
     }
 }
-
-pub trait RunWithValues<Sys, Params, In, Out, P>
-where
-    Sys: IntoSystem<In, Out, P>,
-    Out: IntoCommandResult,
-{
-    fn run_with_values(&self, values: &[ValueRawOwned]) -> Result<Sys, FromValueError>;
-}
-
-macro_rules! impl_run_with_values {
-    ($( $i: ident ),*) => {
-        impl<Func, Sys, In, Out, P, $($i),*> RunWithValues<Sys, ($($i,)*), In, Out, P> for Func
-        where
-            Func: 'static + Send + Sync + Fn($($i,)*) -> Sys,
-            Sys: IntoSystem<In, Out, P>,
-            Out: IntoCommandResult,
-            $($i: for<'a> FromValue<'a>),*
-        {
-            #[allow(unused_variables, unused_mut, unused_assignments)]
-            fn run_with_values(&self, values: &[ValueRawOwned]) -> Result<Sys, FromValueError> {
-                let mut values_iter = values.iter();
-                let mut arg_n = 0;
-                $(
-                    #[allow(non_snake_case)]
-                    let $i = <$i as FromValue>::from_value_iter(&mut values_iter, arg_n)?;
-                    arg_n += 1;
-                )*
-
-                Ok(self($($i, )*))
-            }
-        }
-    };
-}
-
-// Stairway to bevyn
-impl_run_with_values!();
-impl_run_with_values!(F0);
-impl_run_with_values!(F0, F1);
-impl_run_with_values!(F0, F1, F2);
-impl_run_with_values!(F0, F1, F2, F3);
-impl_run_with_values!(F0, F1, F2, F3, F4);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7, F8);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7, F8, F9);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15);
-impl_run_with_values!(F0, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15, F16);

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_console::{reply_ok, ConsoleCommand, ConsolePlugin};
+use bevy_console::{reply, CommandArgInfo, ConsoleCommand, ConsolePlugin};
 
 fn main() {
     App::new()
@@ -9,23 +9,24 @@ fn main() {
         .run();
 }
 
+/// Prints given arguments to the console
 #[derive(ConsoleCommand)]
 #[console_command(name = "log")]
 struct LogCommand {
+    /// Message to print
     msg: String,
-    name: String,
-    age: Option<i64>,
+    /// Number of times to print message
+    num: Option<i64>,
 }
 
-fn log_command(mut log: ConsoleCommand<LogCommand>, time: Res<Time>) {
-    if let Some(cmd) = log.single() {
-        reply_ok!(
-            log,
-            "You said {} at {}, btw ur name is {} and age is {:?}",
-            cmd.msg,
-            time.seconds_since_startup(),
-            cmd.name,
-            cmd.age
-        );
+fn log_command(mut log: ConsoleCommand<LogCommand>) {
+    if let Some(LogCommand { msg, num }) = log.take() {
+        let repeat_count = num.unwrap_or(1);
+
+        for _ in 0..repeat_count {
+            reply!(log, "{msg}");
+        }
+
+        log.ok();
     }
 }
