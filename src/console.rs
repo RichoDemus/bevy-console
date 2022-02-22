@@ -197,6 +197,12 @@ impl Default for ConsoleConfiguration {
     }
 }
 
+pub(crate) fn console_config(mut commands: Commands, config: Option<Res<ConsoleConfiguration>>) {
+    if config.is_none() {
+        commands.insert_resource(ConsoleConfiguration::default());
+    }
+}
+
 #[derive(Clone)]
 pub struct HelpCommand {
     pub cmd: String,
