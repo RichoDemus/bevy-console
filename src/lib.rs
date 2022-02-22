@@ -3,12 +3,10 @@ pub use bevy_console_parser::{Value, ValueRawOwned};
 use bevy_egui::EguiPlugin;
 
 pub use crate::command_result::{CommandResult, IntoCommandResult};
-use crate::console::{
-    console_system, receive_console_line, setup_cached_console_commands_system_state, ConsoleState,
-};
+use crate::console::{console_system, receive_console_line, ConsoleState};
 pub use crate::console::{
-    AddConsoleCommand, CommandArgs, CommandName, ConsoleCommand, ConsoleCommandEntered,
-    ConsoleConfiguration, HelpCommand, PrintConsoleLine, ToggleConsoleKey,
+    CommandArgs, CommandName, ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration,
+    HelpCommand, PrintConsoleLine, ToggleConsoleKey,
 };
 pub use crate::value::{FromValue, FromValueError, RunWithValues, ValueType};
 

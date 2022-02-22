@@ -4,7 +4,7 @@ use bevy::{
     app::{EventReaderState, EventWriterState, Events},
     ecs::system::{
         LocalState, ResMutState, ResState, Resource, SystemMeta, SystemParam, SystemParamFetch,
-        SystemParamState, SystemState,
+        SystemParamState,
     },
     input::keyboard::KeyboardInput,
     prelude::*,
@@ -15,7 +15,7 @@ use bevy_egui::{
     EguiContext,
 };
 
-use crate::{FromValueError, IntoCommandResult, RunWithValues};
+use crate::FromValueError;
 
 pub trait CommandName {
     fn command_name() -> &'static str;
@@ -141,96 +141,6 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs> SystemParamFetch<'w, 's>
             command,
             console_line,
         }
-    }
-}
-
-struct CachedConsoleCommandSystemState<'w, 's> {
-    event_state: SystemState<(
-        EventReader<'w, 's, ConsoleCommandEntered>,
-        EventWriter<'w, 's, PrintConsoleLine>,
-    )>,
-}
-
-pub(crate) fn setup_cached_console_commands_system_state(world: &mut World) {
-    let initial_state: SystemState<(
-        EventReader<ConsoleCommandEntered>,
-        EventWriter<PrintConsoleLine>,
-    )> = SystemState::new(world);
-    world.insert_resource(CachedConsoleCommandSystemState {
-        event_state: initial_state,
-    });
-}
-
-pub trait AddConsoleCommand {
-    fn add_console_command<F, Sys, Params, Out, P>(
-        &mut self,
-        command: &'static str,
-        handler: F,
-    ) -> &mut Self
-    where
-        F: RunWithValues<Sys, Params, (), Out, P> + Send + Sync + 'static,
-        Sys: IntoSystem<(), Out, P>,
-        Out: IntoCommandResult;
-}
-
-impl AddConsoleCommand for App {
-    fn add_console_command<F, Sys, Params, Out, P>(
-        &mut self,
-        command: &'static str,
-        handler: F,
-    ) -> &mut Self
-    where
-        F: RunWithValues<Sys, Params, (), Out, P> + Send + Sync + 'static,
-        Sys: IntoSystem<(), Out, P>,
-        Out: IntoCommandResult,
-    {
-        self.add_system(
-            (move |world: &mut World| {
-                world.resource_scope(|world, mut cached_state: Mut<CachedConsoleCommandSystemState>| {
-                    let (mut event_reader, mut console_line) = cached_state.event_state.get_mut(world);
-
-                    let command_results: Vec<_> = event_reader
-                        .iter()
-                        .filter(|event| event.command == command)
-                        .filter_map(|args| match <F as RunWithValues<Sys, Params, (), Out, P>>::run_with_values(
-                            &handler,
-                            &args.args,
-                        ) {
-                            Ok(system) => {
-                                let system = IntoSystem::into_system(system); // TODO: Update this to `into_system` when bevy 0.6.2 is released
-                                Some(system)
-                            }
-                            Err(err) => {
-                                console_line.send(PrintConsoleLine::new(err.to_string()));
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>().into_iter().map(|mut system| {
-                            system.initialize(world);
-                            let command_result = system.run((), world).into_command_result();
-                            system.apply_buffers(world);
-
-                            command_result
-                        })
-                        .collect();
-
-                    let (_, mut console_line) = cached_state.event_state.get_mut(world);
-
-                    for command_result in command_results {
-                        if let Some(msg) = command_result.message {
-                            console_line.send(PrintConsoleLine::new(msg));
-                        }
-
-                        if command_result.success {
-                            console_line.send(PrintConsoleLine::new("[ok]".to_string()));
-                        } else {
-                            console_line.send(PrintConsoleLine::new("[failed]".to_string()));
-                        }
-                    }
-                });
-            })
-            .exclusive_system(),
-        )
     }
 }
 
