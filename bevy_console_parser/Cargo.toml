@@ -1,0 +1,17 @@
+[package]
+name = "bevy_console_parser"
+version = "0.2.4"
+edition = "2021"
+authors = ["Ari Seyhun <ariseyhun@live.com.au>"]
+homepage = "https://github.com/RichoDemus/bevy-console"
+repository = "https://github.com/RichoDemus/bevy-console"
+description = "console command parser for bevy_console"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+nom = "7.1"
+nom-supreme = "0.6"
+
+[dev-dependencies]
+pretty_assertions = "1.1"
