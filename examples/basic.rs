@@ -1,8 +1,5 @@
 use bevy::prelude::*;
-use bevy_console::{
-    reply_ok, CommandArgs, CommandName, ConsoleCommand, ConsoleConfiguration, ConsolePlugin,
-    FromValue, FromValueError, ValueRawOwned,
-};
+use bevy_console::{reply_ok, ConsoleCommand, ConsolePlugin};
 
 fn main() {
     App::new()
@@ -12,32 +9,23 @@ fn main() {
         .run();
 }
 
+#[derive(ConsoleCommand)]
+#[console_command(name = "log")]
 struct LogCommand {
     msg: String,
-}
-
-impl CommandName for LogCommand {
-    fn command_name() -> &'static str {
-        "log"
-    }
-}
-
-impl CommandArgs for LogCommand {
-    fn from_values(values: &[ValueRawOwned]) -> Result<Self, FromValueError> {
-        let mut values = values.iter();
-        let msg = String::from_value_iter(&mut values, 0)?;
-
-        Ok(LogCommand { msg })
-    }
+    name: String,
+    age: Option<i64>,
 }
 
 fn log_command(mut log: ConsoleCommand<LogCommand>, time: Res<Time>) {
     if let Some(cmd) = log.single() {
         reply_ok!(
             log,
-            "You said {} at {}",
+            "You said {} at {}, btw ur name is {} and age is {:?}",
             cmd.msg,
-            time.seconds_since_startup()
+            time.seconds_since_startup(),
+            cmd.name,
+            cmd.age
         );
     }
 }

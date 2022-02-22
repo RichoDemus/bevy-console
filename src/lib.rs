@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+pub use bevy_console_derive::ConsoleCommand;
 pub use bevy_console_parser::{Value, ValueRawOwned};
 use bevy_egui::EguiPlugin;
 
