@@ -14,7 +14,6 @@ proc-macro = true
 
 [dependencies]
 better-bae = "0.1.8"
-bevy_macro_utils = { git = "https://github.com/bevyengine/bevy" }
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = "1.0"

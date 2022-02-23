@@ -1,64 +1,40 @@
+#![doc = include_str!("../README.md")]
+#![deny(missing_docs)]
+
 use bevy::prelude::*;
 pub use bevy_console_derive::ConsoleCommand;
 pub use bevy_console_parser::{Value, ValueRawOwned};
 use bevy_egui::EguiPlugin;
+use commands::exit::{exit_command, ExitCommand};
+use commands::help::{help_command, HelpCommand};
 
-pub use crate::command_result::{CommandResult, IntoCommandResult};
-use crate::console::{console_config, console_system, receive_console_line, ConsoleState};
+use crate::console::{console_system, receive_console_line, ConsoleState};
 pub use crate::console::{
-    CommandArgInfo, CommandArgs, CommandHelp, CommandInfo, CommandName, ConsoleCommand,
-    ConsoleCommandEntered, ConsoleConfiguration, HelpCommand, PrintConsoleLine, ToggleConsoleKey,
+    AddConsoleCommand, CommandArgInfo, CommandArgs, CommandHelp, CommandInfo, CommandName,
+    ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration, PrintConsoleLine,
+    ToggleConsoleKey,
 };
 pub use crate::value::{FromValue, FromValueError, ValueType};
 
-mod command_result;
+mod commands;
 mod console;
+mod macros;
 mod value;
 
+/// Console plugin.
 pub struct ConsolePlugin;
 
 impl Plugin for ConsolePlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(ConsoleState::default())
+        app.init_resource::<ConsoleConfiguration>()
+            .insert_resource(ConsoleState::default())
             .add_event::<ConsoleCommandEntered>()
             .add_event::<PrintConsoleLine>()
             .add_plugin(EguiPlugin)
-            .add_startup_system(console_config)
+            .add_console_command::<ExitCommand, _, _>(exit_command)
+            .add_console_command::<HelpCommand, _, _>(help_command)
             // if there's other egui code we need to make sure they don't run at the same time
             .add_system(console_system.exclusive_system())
             .add_system(receive_console_line);
     }
-}
-
-/// Reply with the [`format!`] syntax.
-#[macro_export]
-macro_rules! reply {
-    ($cmd: ident, $fmt: literal$(, $($arg:expr),* $(,)?)?) => {
-        {
-            let msg = format!($fmt$(, $($arg),*)?);
-            $cmd.reply(msg);
-        }
-    };
-}
-
-/// Reply with the [`format!`] syntax followed by [ok].
-#[macro_export]
-macro_rules! reply_ok {
-    ($cmd: ident, $fmt: literal$(, $($arg:expr),* $(,)?)?) => {
-        {
-            let msg = format!($fmt$(, $($arg),*)?);
-            $cmd.reply_ok(msg);
-        }
-    };
-}
-
-/// Reply with the [`format!`] syntax followed by [failed].
-#[macro_export]
-macro_rules! reply_fail {
-    ($cmd: ident, $fmt: literal$(, $($arg:expr),* $(,)?)?) => {
-        {
-            let msg = format!($fmt$(, $($arg),*)?);
-            $cmd.reply_failed(msg);
-        }
-    };
 }

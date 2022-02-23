@@ -1,6 +1,5 @@
 use better_bae::{FromAttributes, TryFromAttributes};
-use bevy_macro_utils::get_named_struct_fields;
-use proc_macro::TokenStream;
+use proc_macro::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{parse_macro_input, spanned::Spanned, DeriveInput};
 
@@ -26,8 +25,8 @@ struct ConsoleCommandContainerAttr {
 ///
 /// # Example
 ///
-/// ```rust
-/// /// Prints given arguments to the console
+/// ```
+/// /// Prints given arguments to the console.
 /// #[derive(ConsoleCommand)]
 /// #[console_command(name = "log")]
 /// struct LogCommand {
@@ -43,9 +42,23 @@ pub fn derive_console_command(input: TokenStream) -> TokenStream {
 
     let ident = &ast.ident;
 
-    let named_fields = match get_named_struct_fields(&ast.data) {
-        Ok(fields) => &fields.named,
-        Err(err) => return err.into_compile_error().into(),
+    let named_fields = match ast.data {
+        syn::Data::Struct(syn::DataStruct {
+            fields: syn::Fields::Named(fields),
+            ..
+        }) => fields.named,
+        syn::Data::Struct(syn::DataStruct {
+            fields: syn::Fields::Unit,
+            ..
+        }) => syn::punctuated::Punctuated::default(),
+        _ => {
+            return syn::Error::new(
+                Span::call_site().into(),
+                "only structs with named fields and unit structs are supported",
+            )
+            .into_compile_error()
+            .into();
+        }
     };
 
     let attrs = match ConsoleCommandContainerAttr::from_attributes(&ast.attrs) {
@@ -90,7 +103,7 @@ pub fn derive_console_command(input: TokenStream) -> TokenStream {
         let index = i as u8;
 
         let expanded = quote! {
-            #ident: <#ty as ::bevy_console::FromValue>::from_value_iter(&mut values, #index)?,
+            #ident: <#ty as bevy_console::FromValue>::from_value_iter(&mut values, #index)?,
         };
         fields.push(expanded);
     }
@@ -128,7 +141,7 @@ pub fn derive_console_command(input: TokenStream) -> TokenStream {
             let optional = is_ty_option(ty);
 
             quote! {
-                CommandArgInfo {
+                bevy_console::CommandArgInfo {
                     name: #name.to_string(),
                     ty: #ty_string.to_string(),
                     description: #arg_description,
@@ -140,15 +153,15 @@ pub fn derive_console_command(input: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         #[automatically_derived]
-        impl ::bevy_console::CommandName for #ident {
+        impl bevy_console::CommandName for #ident {
             fn command_name() -> &'static str {
                 #command_name
             }
         }
 
         #[automatically_derived]
-        impl ::bevy_console::CommandArgs for #ident {
-            fn from_values(values: &[::bevy_console::ValueRawOwned]) -> ::std::result::Result<Self, ::bevy_console::FromValueError> {
+        impl bevy_console::CommandArgs for #ident {
+            fn from_values(values: &[bevy_console::ValueRawOwned]) -> ::std::result::Result<Self, bevy_console::FromValueError> {
                 let mut values = values.iter();
 
                 Ok(#ident {
@@ -158,9 +171,10 @@ pub fn derive_console_command(input: TokenStream) -> TokenStream {
         }
 
         #[automatically_derived]
-        impl ::bevy_console::CommandHelp for #ident {
-            fn command_help() -> ::std::option::Option<::bevy_console::CommandInfo> {
-                ::std::option::Option::Some(::bevy_console::CommandInfo {
+        impl bevy_console::CommandHelp for #ident {
+            fn command_help() -> ::std::option::Option<bevy_console::CommandInfo> {
+                ::std::option::Option::Some(bevy_console::CommandInfo {
+                    name: #command_name.to_string(),
                     description: #command_description,
                     args: vec![
                         #( #command_arg_info, )*

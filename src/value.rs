@@ -2,11 +2,16 @@ use std::fmt;
 
 use bevy_console_parser::{Value, ValueRawOwned};
 
+/// The value types available for arguments.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ValueType {
+    /// String arg type
     String,
+    /// Int arg type
     Int,
+    /// Float arg type
     Float,
+    /// Bool arg type
     Bool,
 }
 
@@ -21,14 +26,21 @@ impl fmt::Display for ValueType {
     }
 }
 
+/// Error when trying to parse values.
 #[derive(Clone, Debug, PartialEq)]
 pub enum FromValueError {
+    /// Not enough arguments provided
     NotEnoughArgs,
+    /// Unexpected argument type
     UnexpectedArgType {
+        /// Argument number, starting from 0
         arg_num: u8,
+        /// Expected value type
         expected: ValueType,
+        /// Received value type
         received: ValueType,
     },
+    /// Custom error
     Custom(String),
 }
 
@@ -50,9 +62,12 @@ impl fmt::Display for FromValueError {
     }
 }
 
+/// Parse from argument value.
 pub trait FromValue<'a>: Sized {
+    /// Parse a [`ValueRawOwned`] into `Self`.
     fn from_value(value: &'a ValueRawOwned, arg_num: u8) -> Result<Self, FromValueError>;
 
+    /// Parse a iterator of [`ValueRawOwned`] into `Self`.
     fn from_value_iter<I>(value: &mut I, arg_num: u8) -> Result<Self, FromValueError>
     where
         I: Iterator<Item = &'a ValueRawOwned>,

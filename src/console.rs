@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::{fmt::Write, mem};
 
+use bevy::ecs::schedule::IntoSystemDescriptor;
 use bevy::{
     app::{EventReaderState, EventWriterState, Events},
     ecs::system::{
@@ -18,123 +20,189 @@ use bevy_egui::{
 
 use crate::FromValueError;
 
+/// Console command name.
+///
+/// # Example
+///
+/// `log "hello"`
+///
+/// ```
+/// struct LogCommand;
+///
+/// impl CommandName for LogCommand {
+///     fn command_name() -> &'static str {
+///         "log"
+///     }
+/// }
+/// ```
 pub trait CommandName {
+    /// Command name
     fn command_name() -> &'static str;
 }
 
+/// Parse arguments from values.
+///
+/// # Example
+///
+/// ```
+/// struct LogCommand {
+///     msg: String,
+/// }
+///
+/// impl CommandArgs for LogCommand {
+///     fn from_values(values: &[ValueRawOwned]) -> Result<Self, FromValueError> {
+///         let mut values = values.iter();
+///         let msg = String::from_value_iter(&mut values, 0)?;
+///
+///         Ok(LogCommand {
+///             msg
+///         })
+///     }
+/// }
+/// ```
 pub trait CommandArgs: Sized {
+    /// Parse arguments from values.
     fn from_values(values: &[ValueRawOwned]) -> Result<Self, FromValueError>;
 }
 
+/// Provides command usage information including description, arguments and their types.
+///
+/// # Example
+///
+/// ```
+/// struct LogCommand {
+///     msg: String,
+/// }
+///
+/// impl CommandHelp for LogCommand {
+///     fn command_help() -> Option<CommandInfo> {
+///         Some(CommandInfo {
+///             name: "log".to_string(),
+///             description: Some("Prints a message to the console".to_string()),
+///             args: vec![
+///                 CommandArgInfo {
+///                     name: "msg".to_string(),
+///                     ty: "string".to_string(),
+///                     description: Some("message to print".to_string()),
+///                     optional: false,
+///                 },
+///             ],
+///         })
+///     }
+/// }
+/// ```
 pub trait CommandHelp: CommandName {
+    /// Help for a console command.
     fn command_help() -> Option<CommandInfo> {
         None
     }
-
-    fn help_text() -> Option<String> {
-        #[allow(unused_must_use)]
-        Self::command_help().map(|command_info| {
-            let mut buf = "Usage:\n\n".to_string();
-
-            write!(buf, "  > {}", Self::command_name());
-            for CommandArgInfo { name, optional, .. } in &command_info.args {
-                write!(buf, " ");
-                if *optional {
-                    write!(buf, "[");
-                } else {
-                    write!(buf, "<");
-                }
-                write!(buf, "{name}");
-                if *optional {
-                    write!(buf, "]");
-                } else {
-                    write!(buf, ">");
-                }
-            }
-            writeln!(buf);
-            writeln!(buf);
-
-            if let Some(mut description) = command_info.description {
-                description = description
-                    .split('\n')
-                    .map(|line| {
-                        let leading_whitespace = line.len() - line.trim_start().len();
-                        if leading_whitespace < 2 {
-                            format!("{}{line}", " ".repeat(2 - leading_whitespace))
-                        } else {
-                            line.to_string()
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                writeln!(buf, "{description}");
-                writeln!(buf);
-            }
-
-            let longest_arg_name = command_info
-                .args
-                .iter()
-                .map(|arg| arg.name.len())
-                .max()
-                .unwrap_or(0);
-            let longest_arg_ty = command_info
-                .args
-                .iter()
-                .map(|arg| arg.ty.len())
-                .max()
-                .unwrap_or(0);
-            for CommandArgInfo {
-                name,
-                ty,
-                description,
-                optional,
-            } in &command_info.args
-            {
-                write!(
-                    buf,
-                    "    {name} {}",
-                    " ".repeat(longest_arg_name - name.len())
-                );
-                if *optional {
-                    write!(buf, "[");
-                } else {
-                    write!(buf, "<");
-                }
-                write!(buf, "{ty}");
-                if *optional {
-                    write!(buf, "]");
-                } else {
-                    write!(buf, ">");
-                }
-                write!(buf, "{}", " ".repeat(longest_arg_ty - ty.len()));
-
-                match description {
-                    Some(description) => {
-                        writeln!(buf, "   - {description}");
-                    }
-                    None => {
-                        writeln!(buf);
-                    }
-                }
-            }
-
-            buf
-        })
-    }
 }
 
+/// Command information.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommandInfo {
+    /// Command name
+    pub name: String,
+    /// Command description
     pub description: Option<String>,
+    /// Command argument information
     pub args: Vec<CommandArgInfo>,
 }
 
+/// Command argument information.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CommandArgInfo {
+    /// Argument name
     pub name: String,
+    /// Argument type as string
     pub ty: String,
+    /// Argument description
     pub description: Option<String>,
+    /// Is argument optional
     pub optional: bool,
+}
+
+impl CommandInfo {
+    /// Compine command help into usage string.
+    #[allow(unused_must_use)]
+    pub fn help_text(&self) -> String {
+        let mut buf = "Usage:\n\n".to_string();
+
+        write!(buf, "  > {}", self.name);
+        for CommandArgInfo { name, optional, .. } in &self.args {
+            write!(buf, " ");
+            if *optional {
+                write!(buf, "[");
+            } else {
+                write!(buf, "<");
+            }
+            write!(buf, "{name}");
+            if *optional {
+                write!(buf, "]");
+            } else {
+                write!(buf, ">");
+            }
+        }
+        writeln!(buf);
+        writeln!(buf);
+
+        if let Some(description) = &self.description {
+            let description = description.lines().fold(String::new(), |mut buf, s| {
+                let spaces = s.chars().take_while(|c| *c == ' ').count();
+                for _ in 0..2usize.saturating_sub(spaces) {
+                    buf.push(' ');
+                }
+                buf.push_str(s);
+                buf.push('\n');
+                buf
+            });
+            writeln!(buf, "{description}");
+        }
+
+        let longest_arg_name = self
+            .args
+            .iter()
+            .map(|arg| arg.name.len())
+            .max()
+            .unwrap_or(0);
+        let longest_arg_ty = self.args.iter().map(|arg| arg.ty.len()).max().unwrap_or(0);
+        for CommandArgInfo {
+            name,
+            ty,
+            description,
+            optional,
+        } in &self.args
+        {
+            write!(
+                buf,
+                "    {name} {}",
+                " ".repeat(longest_arg_name - name.len())
+            );
+            if *optional {
+                write!(buf, "[");
+            } else {
+                write!(buf, "<");
+            }
+            write!(buf, "{ty}");
+            if *optional {
+                write!(buf, "]");
+            } else {
+                write!(buf, ">");
+            }
+            write!(buf, "{}", " ".repeat(longest_arg_ty - ty.len()));
+
+            match description {
+                Some(description) => {
+                    writeln!(buf, "   - {description}");
+                }
+                None => {
+                    writeln!(buf);
+                }
+            }
+        }
+
+        buf
+    }
 }
 
 /// Executed parsed console command.
@@ -144,8 +212,8 @@ pub struct CommandArgInfo {
 ///
 /// # Example
 ///
-/// ```rust
-/// /// Prints given arguments to the console
+/// ```
+/// /// Prints given arguments to the console.
 /// #[derive(ConsoleCommand)]
 /// #[console_command(name = "log")]
 /// struct LogCommand {
@@ -175,30 +243,36 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
         mem::take(&mut self.command)
     }
 
-    /// Print [ok] in the console.
+    /// Print `[ok]` in the console.
     pub fn ok(&mut self) {
         self.console_line
             .send(PrintConsoleLine::new("[ok]".to_string()));
     }
 
-    /// Print [failed] in the console.
+    /// Print `[failed]` in the console.
     pub fn failed(&mut self) {
         self.console_line
             .send(PrintConsoleLine::new("[failed]".to_string()));
     }
 
     /// Print a reply in the console.
+    ///
+    /// See [`reply!`](crate::reply) for usage with the [`format!`] syntax.
     pub fn reply(&mut self, msg: impl Into<String>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
     }
 
-    /// Print a reply in the console followed by [ok].
+    /// Print a reply in the console followed by `[ok]`.
+    ///
+    /// See [`reply_ok!`](crate::reply_ok) for usage with the [`format!`] syntax.
     pub fn reply_ok(&mut self, msg: impl Into<String>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
         self.ok();
     }
 
-    /// Print a reply in the console followed by [failed].
+    /// Print a reply in the console followed by `[failed]`.
+    ///
+    /// See [`reply_failed!`](crate::reply_failed) for usage with the [`format!`] syntax.
     pub fn reply_failed(&mut self, msg: impl Into<String>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
         self.failed();
@@ -266,8 +340,8 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamF
                 Ok(value) => Some(value),
                 Err(err) => {
                     console_line.send(PrintConsoleLine::new(err.to_string()));
-                    if let Some(help_text) = T::help_text() {
-                        console_line.send(PrintConsoleLine::new(help_text));
+                    if let Some(help_text) = T::command_help() {
+                        console_line.send(PrintConsoleLine::new(help_text.help_text()));
                     }
                     None
                 }
@@ -280,18 +354,24 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamF
     }
 }
 
+/// Parsed raw console command into `command` and `args`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConsoleCommandEntered {
+    /// Command name
     pub command: String,
+    /// Raw parsed arguments
     pub args: Vec<ValueRawOwned>,
 }
 
+/// Events to print to the console.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrintConsoleLine {
+    /// Console line
     pub line: String,
 }
 
 impl PrintConsoleLine {
+    /// Creates a new console line to print.
     pub const fn new(line: String) -> Self {
         Self { line }
     }
@@ -304,50 +384,91 @@ pub(crate) struct ConsoleState {
     scrollback: Vec<String>,
 }
 
+/// Key for toggling the console.
 #[derive(Copy, Clone)]
 pub enum ToggleConsoleKey {
+    /// Keycode supported by bevy_input
     KeyCode(KeyCode),
+    /// Raw scan code
     ScanCode(u32),
 }
 
+/// Console configuration
 #[derive(Clone)]
 pub struct ConsoleConfiguration {
+    /// Registered keys for toggling the console
     pub keys: Vec<ToggleConsoleKey>,
+    /// Left position
     pub left_pos: f32,
+    /// Top position
     pub top_pos: f32,
+    /// Console height
     pub height: f32,
+    /// Console width
     pub width: f32,
-    pub help: Vec<HelpCommand>,
+    /// Registered console commands
+    pub commands: BTreeMap<&'static str, Option<CommandInfo>>,
 }
 
 impl Default for ConsoleConfiguration {
     fn default() -> Self {
         Self {
             keys: vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)],
-            left_pos: 200.,
-            top_pos: 100.,
-            height: 400.,
-            width: 800.,
-            help: vec![],
+            left_pos: 200.0,
+            top_pos: 100.0,
+            height: 400.0,
+            width: 800.0,
+            commands: BTreeMap::new(),
         }
     }
 }
 
-pub(crate) fn console_config(mut commands: Commands, config: Option<Res<ConsoleConfiguration>>) {
-    if config.is_none() {
-        commands.insert_resource(ConsoleConfiguration::default());
-    }
+/// Add a console commands to Bevy app.
+pub trait AddConsoleCommand {
+    /// Add a console command with a given system.
+    ///
+    /// This registers the console command so it will print with the built-in `help` console command.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// app.add_console_command::<LogCommand, _, _>(log_command);
+    /// #
+    /// # /// Prints given arguments to the console.
+    /// # #[derive(ConsoleCommand)]
+    /// # #[console_command(name = "log")]
+    /// # struct LogCommand;
+    /// #
+    /// # fn log_command(mut log: ConsoleCommand<LogCommand>) {}
+    /// ```
+    fn add_console_command<T: CommandName + CommandHelp, Sys, Params>(
+        &mut self,
+        system: Sys,
+    ) -> &mut Self
+    where
+        Sys: IntoSystemDescriptor<Params>;
 }
 
-#[derive(Clone)]
-pub struct HelpCommand {
-    pub cmd: String,
-    pub description: String,
-}
+impl AddConsoleCommand for App {
+    fn add_console_command<T: CommandName + CommandHelp, Sys, Params>(
+        &mut self,
+        system: Sys,
+    ) -> &mut Self
+    where
+        Sys: IntoSystemDescriptor<Params>,
+    {
+        let sys = move |mut config: ResMut<ConsoleConfiguration>| {
+            let name = T::command_name();
+            if config.commands.contains_key(name) {
+                warn!(
+                    "console command '{}' already registered and was overwritten",
+                    name
+                );
+            }
+            config.commands.insert(name, T::command_help());
+        };
 
-impl HelpCommand {
-    pub const fn new(cmd: String, description: String) -> Self {
-        Self { cmd, description }
+        self.add_startup_system(sys).add_system(system)
     }
 }
 
@@ -405,19 +526,6 @@ pub(crate) fn console_system(
             if response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
                 if state.buf.is_empty() {
                     state.scrollback.push(String::new());
-                } else if state.buf.eq("help") {
-                    let mut input = state.buf.clone();
-                    state.buf.clear();
-                    input.insert(0, ' ');
-                    input.insert(0, '$');
-                    state.scrollback.push(input);
-                    state.scrollback.push("available commands:".to_string());
-                    for help_command in &config.help {
-                        state.scrollback.push(format!(
-                            "\t{} - {}",
-                            help_command.cmd, help_command.description
-                        ));
-                    }
                 } else {
                     let msg = format!("$ {}", state.buf);
                     state.scrollback.push(msg);

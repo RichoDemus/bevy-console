@@ -1,11 +1,11 @@
 use bevy::prelude::*;
-use bevy_console::{reply, CommandArgInfo, ConsoleCommand, ConsolePlugin};
+use bevy_console::{reply, AddConsoleCommand, ConsoleCommand, ConsolePlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(ConsolePlugin)
-        .add_system(log_command)
+        .add_console_command::<LogCommand, _, _>(log_command)
         .run();
 }
 
