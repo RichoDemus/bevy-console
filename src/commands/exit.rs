@@ -14,7 +14,7 @@ pub(crate) fn exit_command(
     mut exit_writer: EventWriter<AppExit>,
 ) {
     if exit.take().is_some() {
-        exit_writer.send_default();
+        exit_writer.send(AppExit);
         exit.ok();
     }
 }
