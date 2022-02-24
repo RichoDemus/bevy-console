@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::{fmt::Write, mem};
 
@@ -408,6 +408,8 @@ pub struct ConsoleConfiguration {
     pub width: f32,
     /// Registered console commands
     pub commands: BTreeMap<&'static str, Option<CommandInfo>>,
+    /// Number of commands to store in history
+    pub history_size: usize,
 }
 
 impl Default for ConsoleConfiguration {
@@ -419,6 +421,7 @@ impl Default for ConsoleConfiguration {
             height: 400.0,
             width: 800.0,
             commands: BTreeMap::new(),
+            history_size: 20,
         }
     }
 }
@@ -477,10 +480,22 @@ pub(crate) struct ConsoleOpen {
     open: bool,
 }
 
-#[derive(Default)]
 pub(crate) struct ConsoleState {
     buf: String,
     scrollback: Vec<String>,
+    history: VecDeque<String>,
+    history_index: usize,
+}
+
+impl Default for ConsoleState {
+    fn default() -> Self {
+        ConsoleState {
+            buf: String::default(),
+            scrollback: Vec::new(),
+            history: VecDeque::from([String::new()]),
+            history_index: 0,
+        }
+    }
 }
 
 pub(crate) fn console_toggle(
@@ -535,14 +550,19 @@ pub(crate) fn console_toggle(
                         .lock_focus(true)
                         .text_style(egui::TextStyle::Monospace);
 
-                    // Handle input
+                    // Handle enter
                     let text_edit_response = ui.add(text_edit);
                     if text_edit_response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
-                        if state.buf.is_empty() {
+                        if state.buf.trim().is_empty() {
                             state.scrollback.push(String::new());
                         } else {
                             let msg = format!("$ {}", state.buf);
                             state.scrollback.push(msg);
+                            let cmd_string = state.buf.clone();
+                            state.history.insert(1, cmd_string);
+                            if state.history.len() > config.history_size + 1 {
+                                state.history.pop_back();
+                            }
 
                             match parse_console_command(&state.buf) {
                                 Ok(cmd) => {
@@ -566,6 +586,29 @@ pub(crate) fn console_toggle(
 
                             state.buf.clear();
                         }
+                    }
+
+                    // Handle up and down through history
+                    if text_edit_response.has_focus()
+                        && ui.input().key_pressed(egui::Key::ArrowUp)
+                        && state.history.len() > 1
+                        && state.history_index < state.history.len() - 1
+                    {
+                        if state.history_index == 0 && !state.buf.trim().is_empty() {
+                            *state.history.get_mut(0).unwrap() = state.buf.clone();
+                        }
+
+                        state.history_index += 1;
+                        let previous_item = state.history.get(state.history_index).unwrap().clone();
+                        state.buf = previous_item;
+                        // text_edit_response.
+                    } else if text_edit_response.has_focus()
+                        && ui.input().key_pressed(egui::Key::ArrowDown)
+                        && state.history_index > 0
+                    {
+                        state.history_index -= 1;
+                        let next_item = state.history.get(state.history_index).unwrap().clone();
+                        state.buf = next_item;
                     }
 
                     // Focus on input
