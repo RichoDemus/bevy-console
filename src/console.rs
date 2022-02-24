@@ -13,6 +13,9 @@ use bevy::{
     prelude::*,
 };
 use bevy_console_parser::{parse_console_command, ValueRawOwned};
+use bevy_egui::egui::epaint::text::cursor::CCursor;
+use bevy_egui::egui::text_edit::CCursorRange;
+use bevy_egui::egui::{Context, Id};
 use bevy_egui::{
     egui::{self, Align, RichText, ScrollArea, TextEdit},
     EguiContext,
@@ -601,7 +604,8 @@ pub(crate) fn console_toggle(
                         state.history_index += 1;
                         let previous_item = state.history.get(state.history_index).unwrap().clone();
                         state.buf = previous_item;
-                        // text_edit_response.
+
+                        set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
                     } else if text_edit_response.has_focus()
                         && ui.input().key_pressed(egui::Key::ArrowDown)
                         && state.history_index > 0
@@ -609,6 +613,8 @@ pub(crate) fn console_toggle(
                         state.history_index -= 1;
                         let next_item = state.history.get(state.history_index).unwrap().clone();
                         state.buf = next_item;
+
+                        set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
                     }
 
                     // Focus on input
@@ -655,6 +661,13 @@ fn console_key_pressed(
     }
 
     false
+}
+
+fn set_cursor_pos(ctx: &Context, id: Id, pos: usize) {
+    if let Some(mut state) = TextEdit::load_state(ctx, id) {
+        state.set_ccursor_range(Some(CCursorRange::one(CCursor::new(pos))));
+        state.store(ctx, id);
+    }
 }
 
 #[cfg(test)]
