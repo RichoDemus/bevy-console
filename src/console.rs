@@ -481,10 +481,10 @@ pub(crate) struct ConsoleOpen {
 }
 
 pub(crate) struct ConsoleState {
-    buf: String,
-    scrollback: Vec<String>,
-    history: VecDeque<String>,
-    history_index: usize,
+    pub(crate) buf: String,
+    pub(crate) scrollback: Vec<String>,
+    pub(crate) history: VecDeque<String>,
+    pub(crate) history_index: usize,
 }
 
 impl Default for ConsoleState {
