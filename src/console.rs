@@ -340,8 +340,15 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamF
                 Ok(value) => Some(value),
                 Err(err) => {
                     console_line.send(PrintConsoleLine::new(err.to_string()));
-                    if let Some(help_text) = T::command_help() {
-                        console_line.send(PrintConsoleLine::new(help_text.help_text()));
+                    match err {
+                        FromValueError::UnexpectedArgType { .. }
+                        | FromValueError::NotEnoughArgs
+                        | FromValueError::Custom(_) => {
+                            if let Some(help_text) = T::command_help() {
+                                console_line.send(PrintConsoleLine::new(help_text.help_text()));
+                            }
+                        }
+                        FromValueError::ValueTooLarge { .. } => {}
                     }
                     None
                 }

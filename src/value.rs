@@ -40,6 +40,13 @@ pub enum FromValueError {
         /// Received value type
         received: ValueType,
     },
+    /// Value too large
+    ValueTooLarge {
+        /// Argument number, starting from 0
+        arg_num: u8,
+        /// Maximum allowed value
+        max: i64,
+    },
     /// Custom error
     Custom(String),
 }
@@ -54,9 +61,17 @@ impl fmt::Display for FromValueError {
                 received,
             } => write!(
                 f,
-                "[error] expected '{expected}' but got '{received}' for arg {}",
+                "[error] expected '{expected}' but got '{received}' for arg #{}",
                 arg_num + 1
             ),
+            FromValueError::ValueTooLarge { arg_num, max } => {
+                write!(
+                    f,
+                    "[error] number is too large for arg #{} (max {})",
+                    arg_num + 1,
+                    max
+                )
+            }
             FromValueError::Custom(msg) => write!(f, "[error] {msg}"),
         }
     }
@@ -115,7 +130,14 @@ macro_rules! impl_from_int_value {
             fn from_value(value: &ValueRawOwned, arg_num: u8) -> Result<Self, FromValueError> {
                 match value {
                     ValueRawOwned::String(_) => Err(unexpected_arg_type!(Int, String, arg_num)),
-                    ValueRawOwned::Int(num, _) => Ok(*num as $ty),
+                    ValueRawOwned::Int(num, _) => {
+                        let max = <$ty>::MAX as i64;
+                        if *num > max {
+                            Err(FromValueError::ValueTooLarge { arg_num, max })
+                        } else {
+                            Ok(*num as $ty)
+                        }
+                    }
                     ValueRawOwned::Float(_, _) => Err(unexpected_arg_type!(Int, Float, arg_num)),
                     ValueRawOwned::Bool(_, _) => Err(unexpected_arg_type!(Int, Bool, arg_num)),
                 }
@@ -128,13 +150,11 @@ impl_from_int_value!(i8);
 impl_from_int_value!(i16);
 impl_from_int_value!(i32);
 impl_from_int_value!(i64);
-impl_from_int_value!(i128);
 impl_from_int_value!(isize);
 impl_from_int_value!(u8);
 impl_from_int_value!(u16);
 impl_from_int_value!(u32);
 impl_from_int_value!(u64);
-impl_from_int_value!(u128);
 impl_from_int_value!(usize);
 
 impl FromValue<'_> for f64 {
