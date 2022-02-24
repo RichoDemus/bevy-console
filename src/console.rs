@@ -478,9 +478,11 @@ impl AddConsoleCommand for App {
     }
 }
 
+/// Console open state
 #[derive(Default)]
-pub(crate) struct ConsoleOpen {
-    open: bool,
+pub struct ConsoleOpen {
+    /// Console open
+    pub open: bool,
 }
 
 pub(crate) struct ConsoleState {
@@ -501,7 +503,7 @@ impl Default for ConsoleState {
     }
 }
 
-pub(crate) fn console_toggle(
+pub(crate) fn console_ui(
     mut egui_context: ResMut<EguiContext>,
     config: Res<ConsoleConfiguration>,
     mut keyboard_input_events: EventReader<KeyboardInput>,

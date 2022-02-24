@@ -9,10 +9,10 @@ use bevy_egui::EguiPlugin;
 use crate::commands::clear::{clear_command, ClearCommand};
 use crate::commands::exit::{exit_command, ExitCommand};
 use crate::commands::help::{help_command, HelpCommand};
-use crate::console::{console_toggle, receive_console_line, ConsoleOpen, ConsoleState};
+use crate::console::{console_ui, receive_console_line, ConsoleState};
 pub use crate::console::{
     AddConsoleCommand, CommandArgInfo, CommandArgs, CommandHelp, CommandInfo, CommandName,
-    ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration, PrintConsoleLine,
+    ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration, ConsoleOpen, PrintConsoleLine,
     ToggleConsoleKey,
 };
 pub use crate::value::{FromValue, FromValueError, ValueType};
@@ -36,7 +36,7 @@ impl Plugin for ConsolePlugin {
             .add_console_command::<ClearCommand, _, _>(clear_command)
             .add_console_command::<ExitCommand, _, _>(exit_command)
             .add_console_command::<HelpCommand, _, _>(help_command)
-            .add_system(console_toggle.exclusive_system())
+            .add_system(console_ui.exclusive_system())
             .add_system(receive_console_line);
     }
 }
