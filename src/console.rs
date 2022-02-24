@@ -377,13 +377,6 @@ impl PrintConsoleLine {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct ConsoleState {
-    buf: String,
-    show: bool,
-    scrollback: Vec<String>,
-}
-
 /// Key for toggling the console.
 #[derive(Copy, Clone)]
 pub enum ToggleConsoleKey {
@@ -472,86 +465,107 @@ impl AddConsoleCommand for App {
     }
 }
 
-// todo handle default values or something
-// todo console flickers on keydown
-// todo dont close console if typing, maybe?
-pub(crate) fn console_system(
-    mut keyboard_input_events: EventReader<KeyboardInput>,
+#[derive(Default)]
+pub(crate) struct ConsoleOpen {
+    open: bool,
+}
+
+#[derive(Default)]
+pub(crate) struct ConsoleState {
+    buf: String,
+    scrollback: Vec<String>,
+}
+
+pub(crate) fn console_toggle(
     mut egui_context: ResMut<EguiContext>,
-    mut state: ResMut<ConsoleState>,
     config: Res<ConsoleConfiguration>,
+    mut keyboard_input_events: EventReader<KeyboardInput>,
+    mut state: ResMut<ConsoleState>,
     mut command_entered: EventWriter<ConsoleCommandEntered>,
+    mut console_open: ResMut<ConsoleOpen>,
 ) {
-    for code in keyboard_input_events.iter() {
-        let code: &KeyboardInput = code;
-
-        let pressed = console_key_pressed(code, &config.keys);
-
-        if pressed {
-            state.show = !state.show;
-        }
+    let pressed = keyboard_input_events
+        .iter()
+        .any(|code| console_key_pressed(code, &config.keys));
+    if pressed {
+        console_open.open = !console_open.open;
     }
-    let scroll_height = config.height - 30.;
-    let mut open = state.show;
-    egui::Window::new("Console")
-        .open(&mut open)
-        .collapsible(false)
-        .fixed_rect(egui::Rect::from_two_pos(
-            egui::Pos2::new(config.left_pos, config.top_pos),
-            egui::Pos2::new(
-                config.left_pos + config.width,
-                config.top_pos + config.height,
-            ),
-        ))
-        .show(egui_context.ctx_mut(), |ui| {
-            ui.set_min_height(config.height);
-            ui.set_min_width(config.width);
-            ScrollArea::vertical()
-                .max_height(scroll_height)
-                .show(ui, |ui| {
-                    ui.vertical(|ui| {
-                        ui.set_min_height(scroll_height);
-                        for line in &state.scrollback {
-                            ui.label(RichText::new(line).monospace());
-                        }
-                    });
-                    ui.scroll_to_cursor(Align::BOTTOM);
-                });
 
-            ui.separator();
-            let text_edit = TextEdit::singleline(&mut state.buf)
-                .desired_width(config.width)
-                .text_style(egui::TextStyle::Monospace);
-            let response = ui.add(text_edit);
-            if response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
-                if state.buf.is_empty() {
-                    state.scrollback.push(String::new());
-                } else {
-                    let msg = format!("$ {}", state.buf);
-                    state.scrollback.push(msg);
+    if console_open.open {
+        egui::Window::new("Console")
+            .collapsible(false)
+            .default_pos([config.left_pos, config.top_pos])
+            .default_size([config.width, config.height])
+            .resizable(true)
+            .show(egui_context.ctx_mut(), |ui| {
+                ui.vertical(|ui| {
+                    let scroll_height = ui.available_height() - 30.0;
 
-                    match parse_console_command(&state.buf) {
-                        Ok(cmd) => {
-                            let command = ConsoleCommandEntered {
-                                command: cmd.command.to_string(),
-                                args: cmd.args.into_iter().map(ValueRawOwned::from).collect(),
-                            };
+                    // Scroll area
+                    ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .stick_to_bottom()
+                        .max_height(scroll_height)
+                        .show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                for line in &state.scrollback {
+                                    ui.label(RichText::new(line).monospace());
+                                }
+                            });
 
-                            command_entered.send(command);
-                        }
-                        Err(_) => {
-                            state
-                                .scrollback
-                                .push("[error] invalid argument(s)".to_string());
+                            // Scroll to bottom if console just opened
+                            if console_open.is_changed() {
+                                ui.scroll_to_cursor(Align::BOTTOM);
+                            }
+                        });
+
+                    // Separator
+                    ui.separator();
+
+                    // Input
+                    let text_edit = TextEdit::singleline(&mut state.buf)
+                        .desired_width(f32::INFINITY)
+                        .lock_focus(true)
+                        .text_style(egui::TextStyle::Monospace);
+
+                    // Handle input
+                    let text_edit_response = ui.add(text_edit);
+                    if text_edit_response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
+                        if state.buf.is_empty() {
+                            state.scrollback.push(String::new());
+                        } else {
+                            let msg = format!("$ {}", state.buf);
+                            state.scrollback.push(msg);
+
+                            match parse_console_command(&state.buf) {
+                                Ok(cmd) => {
+                                    let command = ConsoleCommandEntered {
+                                        command: cmd.command.to_string(),
+                                        args: cmd
+                                            .args
+                                            .into_iter()
+                                            .map(ValueRawOwned::from)
+                                            .collect(),
+                                    };
+
+                                    command_entered.send(command);
+                                }
+                                Err(_) => {
+                                    state
+                                        .scrollback
+                                        .push("[error] invalid argument(s)".to_string());
+                                }
+                            }
+
+                            state.buf.clear();
                         }
                     }
 
-                    state.buf.clear();
-                }
-            }
-            ui.memory().request_focus(response.id);
-        });
-    state.show = open;
+                    // Focus on input
+                    ui.memory().request_focus(text_edit_response.id);
+                });
+            });
+    }
 }
 
 pub(crate) fn receive_console_line(
