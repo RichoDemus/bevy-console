@@ -30,6 +30,8 @@ use crate::FromValueError;
 /// `log "hello"`
 ///
 /// ```
+/// # use bevy_console::CommandName;
+/// #
 /// struct LogCommand;
 ///
 /// impl CommandName for LogCommand {
@@ -48,6 +50,8 @@ pub trait CommandName {
 /// # Example
 ///
 /// ```
+/// # use bevy_console::{CommandArgs, FromValue, FromValueError, ValueRawOwned};
+/// #
 /// struct LogCommand {
 ///     msg: String,
 /// }
@@ -73,9 +77,17 @@ pub trait CommandArgs: Sized {
 /// # Example
 ///
 /// ```
+/// # use bevy_console::{CommandArgInfo, CommandHelp, CommandInfo, CommandName};
+/// #
 /// struct LogCommand {
 ///     msg: String,
 /// }
+/// #
+/// # impl CommandName for LogCommand {
+/// #     fn command_name() -> &'static str {
+/// #         "log"
+/// #     }
+/// # }
 ///
 /// impl CommandHelp for LogCommand {
 ///     fn command_help() -> Option<CommandInfo> {
@@ -216,6 +228,8 @@ impl CommandInfo {
 /// # Example
 ///
 /// ```
+/// # use bevy_console::ConsoleCommand;
+/// #
 /// /// Prints given arguments to the console.
 /// #[derive(ConsoleCommand)]
 /// #[console_command(name = "log")]
@@ -438,7 +452,11 @@ pub trait AddConsoleCommand {
     /// # Example
     ///
     /// ```
-    /// app.add_console_command::<LogCommand, _, _>(log_command);
+    /// # use bevy::prelude::*;
+    /// # use bevy_console::{AddConsoleCommand, ConsoleCommand};
+    /// #
+    /// App::new()
+    ///     .add_console_command::<LogCommand, _, _>(log_command);
     /// #
     /// # /// Prints given arguments to the console.
     /// # #[derive(ConsoleCommand)]

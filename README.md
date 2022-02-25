@@ -11,15 +11,16 @@ A simple half-life inspired console with support for argument parsing.
 Add `ConsolePlugin` and optionally the resource `ConsoleConfiguration`.
 
 ```rust
+use bevy::prelude::*;
 use bevy_console::{ConsoleConfiguration, ConsolePlugin};
 
 fn main() {
-    // ...
+    App::new()
         .add_plugin(ConsolePlugin)
         .insert_resource(ConsoleConfiguration {
             // override config here
             ..Default::default()
-        })
+        });
 }
 ```
 
@@ -28,11 +29,13 @@ Create a console command struct and system and add it to your app with `.add_con
 Add [doc comments](https://doc.rust-lang.org/rust-by-example/meta/doc.html#doc-comments) to your command to provide help information in the console.
 
 ```rust
-use bevy_console::{reply, AddConsoleCommand, ConsoleCommand};
+use bevy::prelude::*;
+use bevy_console::{reply, AddConsoleCommand, ConsoleCommand, ConsolePlugin};
 
 fn main() {
-    // ...
-        .add_console_command::<ExampleCommand, _, _>(log_command)
+    App::new()
+        .add_plugin(ConsolePlugin)
+        .add_console_command::<ExampleCommand, _, _>(example_command);
 }
 
 /// Example command

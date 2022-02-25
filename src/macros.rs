@@ -2,7 +2,7 @@
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// reply!(cmd, "Hello, {}", name);
 /// ```
 #[macro_export]
@@ -19,7 +19,7 @@ macro_rules! reply {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// reply_ok!(cmd, "Hello, {}", name);
 /// ```
 #[macro_export]
@@ -36,7 +36,7 @@ macro_rules! reply_ok {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// reply_failed!(cmd, "Hello, {}", name);
 /// ```
 #[macro_export]
