@@ -44,17 +44,6 @@ impl From<ValueRaw<'_>> for Value {
     }
 }
 
-// impl ValueRawOwned {
-//     pub fn as_value_raw(&self) -> ValueRaw<'_> {
-//         match self {
-//             ValueRawOwned::String(s) => ValueRaw::String(s),
-//             ValueRawOwned::Int(num, raw) => ValueRaw::Int(num, &raw),
-//             ValueRawOwned::Float(num, raw) => ValueRaw::Float(num, &raw),
-//             ValueRawOwned::Bool(b, raw) => ValueRaw::Bool(b, &raw),
-//         }
-//     }
-// }
-
 impl From<ValueRawOwned> for Value {
     fn from(value: ValueRawOwned) -> Self {
         match value {
