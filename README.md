@@ -1,44 +1,69 @@
-# bevy console
+# bevy_console
 
-A simple halflife2 style console  
-uses egui to draw the console
+A simple half-life inspired console with support for argument parsing.
 
-![Example image](doc/simple_example.png)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/tqwewe/bevy-console/main/doc/screenshot.png" width="100%">
+</p>
 
 ## Usage
-Add `ConsolePlugin` and optionally the resource `ConsoleConfiguration`
+
+Add `ConsolePlugin` and optionally the resource `ConsoleConfiguration`.
+
 ```rust
+use bevy::prelude::*;
+use bevy_console::{ConsoleConfiguration, ConsolePlugin};
+
 fn main() {
-    App::build()
+    App::new()
         .add_plugin(ConsolePlugin)
         .insert_resource(ConsoleConfiguration {
             // override config here
             ..Default::default()
-        })
+        });
 }
 ```
-Create a system to listen to console events
+
+Create a console command struct and system and add it to your app with `.add_console_command`.
+
+Add [doc comments](https://doc.rust-lang.org/rust-by-example/meta/doc.html#doc-comments) to your command to provide help information in the console.
+
 ```rust
-fn listen_to_console_events(
-    mut console_events: EventReader<ConsoleCommandEntered>,
-) {
-    for event in events.iter() {
-        // event has 2 fields, commands and args
+use bevy::prelude::*;
+use bevy_console::{reply, AddConsoleCommand, ConsoleCommand, ConsolePlugin};
+
+fn main() {
+    App::new()
+        .add_plugin(ConsolePlugin)
+        .add_console_command::<ExampleCommand, _, _>(example_command);
+}
+
+/// Example command
+#[derive(ConsoleCommand)]
+#[console_command(name = "example")]
+struct ExampleCommand {
+    /// Some message
+    msg: String,
+}
+
+fn example_command(mut log: ConsoleCommand<ExampleCommand>) {
+    if let Some(ExampleCommand { msg }) = log.take() {
+        // handle command
     }
 }
 ```
-If you want to send text to the console:
-```rust
-fn write_to_console(
-    mut console_line: EventWriter<PrintConsoleLine>,
-) {
-    console_line.send(PrintConsoleLine::new("Hello".to_string()));
-}
-```
-There's more examples in the examples directory, you'll need to enable the `examples` feature to run them though
-```
-cargo run --example basic_example --features examples
+
+Examples can be found in the [/examples](examples) directory.
+
+```bash
+cargo run --example log_command
 ```
 
+- [log_command](/examples/log_command.rs)
+- [raw_commands](/examples/raw_commands.rs)
+- [write_to_console](/examples/write_to_console.rs)
+- [change_console_key](/examples/change_console_key.rs)
+
 ## wasm
-Should work in wasm, but you need to disable default features
+
+Should work in wasm, but you need to disable default features.

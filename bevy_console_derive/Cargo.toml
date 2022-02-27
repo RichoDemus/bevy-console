@@ -1,0 +1,19 @@
+[package]
+name = "bevy_console_derive"
+version = "0.2.4"
+edition = "2021"
+authors = ["Ari Seyhun <ariseyhun@live.com.au>"]
+homepage = "https://github.com/RichoDemus/bevy-console"
+repository = "https://github.com/RichoDemus/bevy-console"
+description = "derive macros for bevy_console"
+license = "MIT"
+readme = "../README.md"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+better-bae = "0.1.8"
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = "1.0"
