@@ -3,7 +3,7 @@
 A simple half-life inspired console with support for argument parsing.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tqwewe/bevy-console/main/doc/screenshot.png" width="100%">
+  <img src="https://raw.githubusercontent.com/richodemus/bevy-console/main/doc/screenshot.png" width="100%">
 </p>
 
 ## Usage
