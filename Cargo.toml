@@ -22,3 +22,6 @@ examples = [
 [dependencies]
 bevy_egui = "0"
 bevy = { version = "0.6.1", default-features = false }
+
+[dev-dependencies]
+bevy = {version = "0.6", default-features = true}
