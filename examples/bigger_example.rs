@@ -1,3 +1,6 @@
+//! A more complete example that demonstrates how to use the library
+//! Press `~` to open the console
+
 use bevy::app::AppExit;
 use bevy::prelude::*;
 use bevy_console::*;

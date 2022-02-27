@@ -1,3 +1,5 @@
+//! Press `~` to open the console
+
 use bevy::prelude::*;
 use bevy_console::*;
 
