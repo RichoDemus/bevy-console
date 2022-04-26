@@ -2,13 +2,18 @@ use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::{fmt::Write, mem};
 
-use bevy::ecs::schedule::IntoSystemDescriptor;
-use bevy::{
-    app::{EventReaderState, EventWriterState, Events},
-    ecs::system::{
+use bevy::ecs::{
+    schedule::IntoSystemDescriptor,
+    event::{
+        EventReaderState, EventWriterState, Events
+    },
+    system::{
         LocalState, ResMutState, ResState, Resource, SystemMeta, SystemParam, SystemParamFetch,
         SystemParamState,
     },
+};
+
+use bevy::{
     input::keyboard::KeyboardInput,
     prelude::*,
 };
@@ -316,11 +321,10 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParam
 }
 
 unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
-    type Config = ();
 
-    fn init(world: &mut World, system_meta: &mut SystemMeta, _config: Self::Config) -> Self {
-        let event_reader = EventReaderState::init(world, system_meta, (None, ()));
-        let console_line = EventWriterState::init(world, system_meta, ((),));
+    fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
+        let event_reader = EventReaderState::init(world, system_meta);
+        let console_line = EventWriterState::init(world, system_meta);
 
         ConsoleCommandState {
             event_reader,
@@ -328,8 +332,6 @@ unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
             marker: PhantomData::default(),
         }
     }
-
-    fn default_config() {}
 }
 
 impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamFetch<'w, 's>
@@ -560,7 +562,7 @@ pub(crate) fn console_ui(
 
                             // Scroll to bottom if console just opened
                             if console_open.is_changed() {
-                                ui.scroll_to_cursor(Align::BOTTOM);
+                                ui.scroll_to_cursor(Some(Align::BOTTOM));
                             }
                         });
 
