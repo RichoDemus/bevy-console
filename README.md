@@ -6,14 +6,6 @@ A simple half-life inspired console with support for argument parsing.
   <img src="https://raw.githubusercontent.com/richodemus/bevy-console/main/doc/screenshot.png" width="100%">
 </p>
 
-## Bevy support
-
-
-| bevy_console version | Supported Bevy version |
-|----------------------|------------------------|
-| 0.3                  | 0.6                    |
-| 0.4                  | 0.7                    |
-
 ## Usage
 
 Add `ConsolePlugin` and optionally the resource `ConsoleConfiguration`.

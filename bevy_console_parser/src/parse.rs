@@ -298,7 +298,7 @@ mod tests {
                 vec![
                     ValueRaw::String("hello world".to_string()),
                     ValueRaw::Int(10, "10"),
-                    ValueRaw::Bool(true, "true")
+                    ValueRaw::Bool(true, "true"),
                 ]
             ))
         );
@@ -309,7 +309,7 @@ mod tests {
                 vec![
                     ValueRaw::String("hello world".to_string()),
                     ValueRaw::Float(10.0, "10."),
-                    ValueRaw::Bool(true, "true")
+                    ValueRaw::Bool(true, "true"),
                 ]
             ))
         );

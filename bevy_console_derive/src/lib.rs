@@ -71,7 +71,7 @@ pub fn derive_console_command(input: TokenStream) -> TokenStream {
         _ => {
             return syn::Error::new_spanned(attrs.name, "name must be a string literal")
                 .into_compile_error()
-                .into()
+                .into();
         }
     };
 
@@ -85,7 +85,7 @@ pub fn derive_console_command(input: TokenStream) -> TokenStream {
                     TokenStream::from(
                         syn::Error::new_spanned(
                             ty,
-                            "field is required, but an optional field is defined above this field - all optional fields must be placed last"
+                            "field is required, but an optional field is defined above this field - all optional fields must be placed last",
                         )
                             .into_compile_error()
                     ),

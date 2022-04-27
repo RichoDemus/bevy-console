@@ -1,24 +1,12 @@
-use std::collections::{BTreeMap, VecDeque};
-use std::marker::PhantomData;
-use std::{fmt::Write, mem};
-
-use bevy::ecs::event::{EventReaderState, EventWriterState, Events};
-use bevy::ecs::schedule::IntoSystemDescriptor;
 use bevy::ecs::{
+    event::{EventReaderState, EventWriterState, Events},
     schedule::IntoSystemDescriptor,
-    event::{
-        EventReaderState, EventWriterState, Events
-    },
     system::{
         LocalState, ResMutState, ResState, Resource, SystemMeta, SystemParam, SystemParamFetch,
         SystemParamState,
     },
 };
-
-use bevy::{
-    input::keyboard::KeyboardInput,
-    prelude::*,
-};
+use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_console_parser::{parse_console_command, ValueRawOwned};
 use bevy_egui::egui::epaint::text::cursor::CCursor;
 use bevy_egui::egui::text_edit::CCursorRange;
@@ -27,6 +15,9 @@ use bevy_egui::{
     egui::{self, Align, RichText, ScrollArea, TextEdit},
     EguiContext,
 };
+use std::collections::{BTreeMap, VecDeque};
+use std::marker::PhantomData;
+use std::{fmt::Write, mem};
 
 use crate::FromValueError;
 
@@ -695,8 +686,9 @@ fn set_cursor_pos(ctx: &Context, id: Id, pos: usize) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bevy::input::ElementState;
+
+    use super::*;
 
     #[test]
     fn test_console_key_pressed_scan_code() {
