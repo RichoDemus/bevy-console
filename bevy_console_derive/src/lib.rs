@@ -25,7 +25,7 @@ struct ConsoleCommandContainerAttr {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// /// Prints given arguments to the console.
 /// #[derive(ConsoleCommand)]
 /// #[console_command(name = "log")]
