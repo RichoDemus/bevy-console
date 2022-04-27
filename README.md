@@ -1,4 +1,5 @@
 # bevy_console
+[![Check](https://github.com/RichoDemus/bevy-console/actions/workflows/build.yaml/badge.svg)](https://github.com/RichoDemus/bevy-console/actions/workflows/build.yaml)
 
 A simple half-life inspired console with support for argument parsing.
 
