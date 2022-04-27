@@ -1,0 +1,32 @@
+name: Check
+env:
+  CARGO_TERM_COLOR: always
+on:
+  push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: install some deps
+        run: sudo apt install libasound2-dev libudev-dev
+      - name: Load cargo cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: Check
+        run: cargo check --examples --workspace
+      - name: Format
+        run: cargo fmt --check
+      - name: Test
+        run: cargo test --workspace
