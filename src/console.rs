@@ -1,17 +1,12 @@
-use std::collections::{BTreeMap, VecDeque};
-use std::marker::PhantomData;
-use std::{fmt::Write, mem};
-
-use bevy::ecs::schedule::IntoSystemDescriptor;
-use bevy::{
-    app::{EventReaderState, EventWriterState, Events},
-    ecs::system::{
+use bevy::ecs::{
+    event::{EventReaderState, EventWriterState, Events},
+    schedule::IntoSystemDescriptor,
+    system::{
         LocalState, ResMutState, ResState, Resource, SystemMeta, SystemParam, SystemParamFetch,
         SystemParamState,
     },
-    input::keyboard::KeyboardInput,
-    prelude::*,
 };
+use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_console_parser::{parse_console_command, ValueRawOwned};
 use bevy_egui::egui::epaint::text::cursor::CCursor;
 use bevy_egui::egui::text_edit::CCursorRange;
@@ -20,6 +15,9 @@ use bevy_egui::{
     egui::{self, Align, RichText, ScrollArea, TextEdit},
     EguiContext,
 };
+use std::collections::{BTreeMap, VecDeque};
+use std::marker::PhantomData;
+use std::{fmt::Write, mem};
 
 use crate::FromValueError;
 
@@ -316,11 +314,9 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParam
 }
 
 unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
-    type Config = ();
-
-    fn init(world: &mut World, system_meta: &mut SystemMeta, _config: Self::Config) -> Self {
-        let event_reader = EventReaderState::init(world, system_meta, (None, ()));
-        let console_line = EventWriterState::init(world, system_meta, ((),));
+    fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
+        let event_reader = EventReaderState::init(world, system_meta);
+        let console_line = EventWriterState::init(world, system_meta);
 
         ConsoleCommandState {
             event_reader,
@@ -328,8 +324,6 @@ unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
             marker: PhantomData::default(),
         }
     }
-
-    fn default_config() {}
 }
 
 impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamFetch<'w, 's>
@@ -560,7 +554,7 @@ pub(crate) fn console_ui(
 
                             // Scroll to bottom if console just opened
                             if console_open.is_changed() {
-                                ui.scroll_to_cursor(Align::BOTTOM);
+                                ui.scroll_to_cursor(Some(Align::BOTTOM));
                             }
                         });
 
@@ -571,7 +565,7 @@ pub(crate) fn console_ui(
                     let text_edit = TextEdit::singleline(&mut state.buf)
                         .desired_width(f32::INFINITY)
                         .lock_focus(true)
-                        .text_style(egui::TextStyle::Monospace);
+                        .font(egui::TextStyle::Monospace);
 
                     // Handle enter
                     let text_edit_response = ui.add(text_edit);
@@ -692,8 +686,9 @@ fn set_cursor_pos(ctx: &Context, id: Id, pos: usize) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bevy::input::ElementState;
+
+    use super::*;
 
     #[test]
     fn test_console_key_pressed_scan_code() {

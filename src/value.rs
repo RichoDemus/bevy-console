@@ -1,6 +1,5 @@
-use std::fmt;
-
 use bevy_console_parser::{Value, ValueRawOwned};
+use std::fmt;
 
 /// The value types available for arguments.
 #[derive(Clone, Copy, Debug, PartialEq)]
