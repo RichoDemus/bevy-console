@@ -1,10 +1,6 @@
 use bevy::ecs::{
-    event::{EventReaderState, EventWriterState, Events},
     schedule::IntoSystemDescriptor,
-    system::{
-        LocalState, ResMutState, ResState, Resource, SystemMeta, SystemParam, SystemParamFetch,
-        SystemParamState,
-    },
+    system::{Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_console_parser::{parse_console_command, ValueRawOwned};
@@ -294,16 +290,15 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
     }
 }
 
+type ConsoleCommandEnteredFetchState =
+    <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
+type PrintConsoleLineFetchState =
+    <EventWriter<'static, 'static, PrintConsoleLine> as SystemParam>::Fetch;
+
 pub struct ConsoleCommandState<T> {
     #[allow(clippy::type_complexity)]
-    event_reader: EventReaderState<
-        (
-            LocalState<(usize, PhantomData<ConsoleCommandEntered>)>,
-            ResState<Events<ConsoleCommandEntered>>,
-        ),
-        ConsoleCommandEntered,
-    >,
-    console_line: EventWriterState<(ResMutState<Events<PrintConsoleLine>>,), PrintConsoleLine>,
+    event_reader: ConsoleCommandEnteredFetchState,
+    console_line: PrintConsoleLineFetchState,
     marker: PhantomData<T>,
 }
 
@@ -315,8 +310,8 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParam
 
 unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
     fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
-        let event_reader = EventReaderState::init(world, system_meta);
-        let console_line = EventWriterState::init(world, system_meta);
+        let event_reader = ConsoleCommandEnteredFetchState::init(world, system_meta);
+        let console_line = PrintConsoleLineFetchState::init(world, system_meta);
 
         ConsoleCommandState {
             event_reader,
@@ -338,10 +333,18 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamF
         world: &'w World,
         change_tick: u32,
     ) -> Self::Item {
-        let mut event_reader =
-            EventReaderState::get_param(&mut state.event_reader, system_meta, world, change_tick);
-        let mut console_line =
-            EventWriterState::get_param(&mut state.console_line, system_meta, world, change_tick);
+        let mut event_reader = ConsoleCommandEnteredFetchState::get_param(
+            &mut state.event_reader,
+            system_meta,
+            world,
+            change_tick,
+        );
+        let mut console_line = PrintConsoleLineFetchState::get_param(
+            &mut state.console_line,
+            system_meta,
+            world,
+            change_tick,
+        );
 
         let command = event_reader
             .iter()
