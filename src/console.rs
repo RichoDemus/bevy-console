@@ -1,8 +1,7 @@
 use bevy::ecs::{
-    event::{EventReaderState, EventWriterState, Events},
     schedule::IntoSystemDescriptor,
     system::{
-        LocalState, ResMutState, ResState, Resource, SystemMeta, SystemParam, SystemParamFetch,
+        Resource, SystemMeta, SystemParam, SystemParamFetch,
         SystemParamState,
     },
 };
@@ -294,16 +293,16 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
     }
 }
 
+type ConsoleCommandEnteredReaderState =
+    <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
+
+type PrintConsoleLineWriterState =
+    <EventWriter<'static, 'static, PrintConsoleLine> as SystemParam>::Fetch;
+
 pub struct ConsoleCommandState<T> {
     #[allow(clippy::type_complexity)]
-    event_reader: EventReaderState<
-        (
-            LocalState<(usize, PhantomData<ConsoleCommandEntered>)>,
-            ResState<Events<ConsoleCommandEntered>>,
-        ),
-        ConsoleCommandEntered,
-    >,
-    console_line: EventWriterState<(ResMutState<Events<PrintConsoleLine>>,), PrintConsoleLine>,
+    event_reader: ConsoleCommandEnteredReaderState,
+    console_line: PrintConsoleLineWriterState,
     marker: PhantomData<T>,
 }
 
@@ -315,8 +314,8 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParam
 
 unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
     fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
-        let event_reader = EventReaderState::init(world, system_meta);
-        let console_line = EventWriterState::init(world, system_meta);
+        let event_reader = ConsoleCommandEnteredReaderState::init(world, system_meta);
+        let console_line = PrintConsoleLineWriterState::init(world, system_meta);
 
         ConsoleCommandState {
             event_reader,
@@ -338,10 +337,18 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamF
         world: &'w World,
         change_tick: u32,
     ) -> Self::Item {
-        let mut event_reader =
-            EventReaderState::get_param(&mut state.event_reader, system_meta, world, change_tick);
-        let mut console_line =
-            EventWriterState::get_param(&mut state.console_line, system_meta, world, change_tick);
+        let mut event_reader = ConsoleCommandEnteredReaderState::get_param(
+            &mut state.event_reader,
+            system_meta,
+            world,
+            change_tick,
+        );
+        let mut console_line = PrintConsoleLineWriterState::get_param(
+            &mut state.console_line,
+            system_meta,
+            world,
+            change_tick,
+        );
 
         let command = event_reader
             .iter()
@@ -686,7 +693,7 @@ fn set_cursor_pos(ctx: &Context, id: Id, pos: usize) {
 
 #[cfg(test)]
 mod tests {
-    use bevy::input::ElementState;
+    use bevy::input::ButtonState;
 
     use super::*;
 
@@ -695,7 +702,7 @@ mod tests {
         let input = KeyboardInput {
             scan_code: 41,
             key_code: None,
-            state: ElementState::Pressed,
+            state: ButtonState::Pressed,
         };
 
         let config = vec![ToggleConsoleKey::ScanCode(41)];
@@ -709,7 +716,7 @@ mod tests {
         let input = KeyboardInput {
             scan_code: 42,
             key_code: None,
-            state: ElementState::Pressed,
+            state: ButtonState::Pressed,
         };
 
         let config = vec![ToggleConsoleKey::ScanCode(41)];
@@ -723,7 +730,7 @@ mod tests {
         let input = KeyboardInput {
             scan_code: 0,
             key_code: Some(KeyCode::Grave),
-            state: ElementState::Pressed,
+            state: ButtonState::Pressed,
         };
 
         let config = vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)];
@@ -737,7 +744,7 @@ mod tests {
         let input = KeyboardInput {
             scan_code: 0,
             key_code: Some(KeyCode::A),
-            state: ElementState::Pressed,
+            state: ButtonState::Pressed,
         };
 
         let config = vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)];
@@ -751,7 +758,7 @@ mod tests {
         let input = KeyboardInput {
             scan_code: 0,
             key_code: Some(KeyCode::Grave),
-            state: ElementState::Released,
+            state: ButtonState::Released,
         };
 
         let config = vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)];

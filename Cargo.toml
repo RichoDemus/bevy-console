@@ -10,13 +10,13 @@ license = "MIT"
 readme = "README.md"
 
 [dependencies]
-bevy = { version = "0.7", default-features = false }
+bevy = { git = "https://github.com/bevyengine/bevy.git", default-features = false }
 bevy_console_derive = { path = "./bevy_console_derive", version = "0.3.0" }
 bevy_console_parser = { path = "./bevy_console_parser", version = "0.3.0" }
-bevy_egui = "0.13"
+bevy_egui = { git = "https://github.com/brandon-reinhart/bevy_egui", branch = "0.8-dev" }
 
 [dev-dependencies]
-bevy = "0.7.0"
+bevy = { git = "https://github.com/bevyengine/bevy.git" }
 
 [workspace]
 members = ["bevy_console_derive", "bevy_console_parser"]
