@@ -11,7 +11,7 @@ readme = "../README.md"
 
 [dependencies]
 nom = "7.1"
-nom-supreme = "0.6"
+nom-supreme = "0.8"
 
 [dev-dependencies]
 pretty_assertions = "1.1"
