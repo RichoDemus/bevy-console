@@ -1,9 +1,6 @@
 use bevy::ecs::{
     schedule::IntoSystemDescriptor,
-    system::{
-        Resource, SystemMeta, SystemParam, SystemParamFetch,
-        SystemParamState,
-    },
+    system::{Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_console_parser::{parse_console_command, ValueRawOwned};
@@ -19,6 +16,12 @@ use std::marker::PhantomData;
 use std::{fmt::Write, mem};
 
 use crate::FromValueError;
+
+type ConsoleCommandEnteredReaderState =
+    <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
+
+type PrintConsoleLineWriterState =
+    <EventWriter<'static, 'static, PrintConsoleLine> as SystemParam>::Fetch;
 
 /// Console command name.
 ///
@@ -292,12 +295,6 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
         self.failed();
     }
 }
-
-type ConsoleCommandEnteredReaderState =
-    <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
-
-type PrintConsoleLineWriterState =
-    <EventWriter<'static, 'static, PrintConsoleLine> as SystemParam>::Fetch;
 
 pub struct ConsoleCommandState<T> {
     #[allow(clippy::type_complexity)]
