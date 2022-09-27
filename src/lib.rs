@@ -4,7 +4,7 @@
 use bevy::prelude::*;
 pub use bevy_console_derive::ConsoleCommand;
 pub use bevy_console_parser::{Value, ValueRawOwned};
-use bevy_egui::EguiPlugin;
+use bevy_egui::{EguiContext, EguiPlugin};
 
 use crate::commands::clear::{clear_command, ClearCommand};
 use crate::commands::exit::{exit_command, ExitCommand};
@@ -32,11 +32,16 @@ impl Plugin for ConsolePlugin {
             .init_resource::<ConsoleOpen>()
             .add_event::<ConsoleCommandEntered>()
             .add_event::<PrintConsoleLine>()
-            .add_plugin(EguiPlugin)
             .add_console_command::<ClearCommand, _, _>(clear_command)
             .add_console_command::<ExitCommand, _, _>(exit_command)
             .add_console_command::<HelpCommand, _, _>(help_command)
             .add_system(console_ui.exclusive_system())
             .add_system(receive_console_line);
+
+        // Don't create an egui context if one already exists.
+        // This can happen if another plugin is using egui and was installed before us.
+        if !app.world.contains_resource::<EguiContext>() {
+            app.add_plugin(EguiPlugin);
+        }
     }
 }
