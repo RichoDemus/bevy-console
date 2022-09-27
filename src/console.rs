@@ -547,7 +547,7 @@ pub(crate) fn console_ui(
                     // Scroll area
                     ScrollArea::vertical()
                         .auto_shrink([false, false])
-                        .stick_to_bottom()
+                        .stick_to_bottom(true)
                         .max_height(scroll_height)
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
