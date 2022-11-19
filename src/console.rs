@@ -439,7 +439,7 @@ impl Default for ConsoleConfiguration {
             width: 800.0,
             commands: BTreeMap::new(),
             history_size: 20,
-            symbol: "$".to_owned()
+            symbol: "$ ".to_owned()
         }
     }
 }
@@ -580,7 +580,7 @@ pub(crate) fn console_ui(
                         if state.buf.trim().is_empty() {
                             state.scrollback.push(String::new());
                         } else {
-                            let msg = format!("{} {}", config.symbol, state.buf);
+                            let msg = format!("{}{}", config.symbol, state.buf);
                             state.scrollback.push(msg);
                             let cmd_string = state.buf.clone();
                             state.history.insert(1, cmd_string);
