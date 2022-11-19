@@ -425,6 +425,8 @@ pub struct ConsoleConfiguration {
     pub commands: BTreeMap<&'static str, Option<CommandInfo>>,
     /// Number of commands to store in history
     pub history_size: usize,
+    ///Line prefix symbol
+    pub symbol: String,
 }
 
 impl Default for ConsoleConfiguration {
@@ -437,6 +439,7 @@ impl Default for ConsoleConfiguration {
             width: 800.0,
             commands: BTreeMap::new(),
             history_size: 20,
+            symbol: "$".to_owned()
         }
     }
 }
@@ -577,7 +580,7 @@ pub(crate) fn console_ui(
                         if state.buf.trim().is_empty() {
                             state.scrollback.push(String::new());
                         } else {
-                            let msg = format!("$ {}", state.buf);
+                            let msg = format!("{} {}", config.symbol, state.buf);
                             state.scrollback.push(msg);
                             let cmd_string = state.buf.clone();
                             state.history.insert(1, cmd_string);
