@@ -16,7 +16,7 @@ pub(crate) fn help_command(
     config: Res<ConsoleConfiguration>,
 ) {
     match help.take() {
-        Some(HelpCommand { command: Some(cmd) }) => match config.commands.get(cmd.as_str()) {
+        Some(Ok(HelpCommand { command: Some(cmd) })) => match config.commands.get(cmd.as_str()) {
             Some(Some(command_info)) => {
                 help.reply(command_info.help_text());
             }
@@ -27,7 +27,7 @@ pub(crate) fn help_command(
                 reply!(help, "Command '{}' does not exist", cmd);
             }
         },
-        Some(HelpCommand { command: None }) => {
+        Some(Ok(HelpCommand { command: None })) => {
             reply!(help, "Available commands:");
             let longest_command_name = config
                 .commands
@@ -48,6 +48,6 @@ pub(crate) fn help_command(
             }
             help.reply("");
         }
-        None => {}
+        _ => {}
     }
 }

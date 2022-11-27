@@ -23,6 +23,11 @@ type ConsoleCommandEnteredReaderState =
 type PrintConsoleLineWriterState =
     <EventWriter<'static, 'static, PrintConsoleLine> as SystemParam>::Fetch;
 
+/// Super trait aggregating Resource, CommandName, CommandArgs and CommandHelp traits
+pub trait Command: Resource + CommandArgs + CommandHelp + CommandName {}
+
+impl<T: Resource + CommandArgs + CommandHelp + CommandName> Command for T {}
+
 /// Console command name.
 ///
 /// # Example
@@ -241,13 +246,13 @@ impl CommandInfo {
 /// }
 ///
 /// fn log_command(mut log: ConsoleCommand<LogCommand>) {
-///     if let Some(LogCommand { msg, num }) = log.take() {
+///     if let Some(Ok(LogCommand { msg, num })) = log.take() {
 ///         log.ok();
 ///     }
 /// }
 /// ```
 pub struct ConsoleCommand<'w, 's, T> {
-    command: Option<T>,
+    command: Option<Result<T, FromValueError>>,
     console_line: EventWriter<'w, 's, PrintConsoleLine>,
 }
 
@@ -256,7 +261,7 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
     ///
     /// This method should only be called once.
     /// Consecutive calls will return None regardless if the command occured.
-    pub fn take(&mut self) -> Option<T> {
+    pub fn take(&mut self) -> Option<Result<T, FromValueError>> {
         mem::take(&mut self.command)
     }
 
@@ -303,9 +308,7 @@ pub struct ConsoleCommandState<T> {
     marker: PhantomData<T>,
 }
 
-impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParam
-    for ConsoleCommand<'w, 's, T>
-{
+impl<'w, 's, T: Command> SystemParam for ConsoleCommand<'w, 's, T> {
     type Fetch = ConsoleCommandState<T>;
 }
 
@@ -322,9 +325,7 @@ unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
     }
 }
 
-impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamFetch<'w, 's>
-    for ConsoleCommandState<T>
-{
+impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
     type Item = ConsoleCommand<'w, 's, T>;
 
     #[inline]
@@ -351,8 +352,8 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamF
             .iter()
             .find(|cmd| cmd.command == T::command_name())
             .map(|cmd| T::from_values(&cmd.args))
-            .and_then(|result| match result {
-                Ok(value) => Some(value),
+            .map(|result| match result {
+                Ok(value) => Ok(value),
                 Err(err) => {
                     console_line.send(PrintConsoleLine::new(err.to_string()));
                     match err {
@@ -365,7 +366,7 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamF
                         }
                         FromValueError::ValueTooLarge { .. } => {}
                     }
-                    None
+                    Err(err)
                 }
             });
 
@@ -409,7 +410,7 @@ pub enum ToggleConsoleKey {
 }
 
 /// Console configuration
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub struct ConsoleConfiguration {
     /// Registered keys for toggling the console
     pub keys: Vec<ToggleConsoleKey>,
@@ -425,6 +426,8 @@ pub struct ConsoleConfiguration {
     pub commands: BTreeMap<&'static str, Option<CommandInfo>>,
     /// Number of commands to store in history
     pub history_size: usize,
+    ///Line prefix symbol
+    pub symbol: String,
 }
 
 impl Default for ConsoleConfiguration {
@@ -437,6 +440,7 @@ impl Default for ConsoleConfiguration {
             width: 800.0,
             commands: BTreeMap::new(),
             history_size: 20,
+            symbol: "$ ".to_owned(),
         }
     }
 }
@@ -454,7 +458,7 @@ pub trait AddConsoleCommand {
     /// # use bevy_console::{AddConsoleCommand, ConsoleCommand};
     /// #
     /// App::new()
-    ///     .add_console_command::<LogCommand, _, _>(log_command);
+    ///     .add_console_command::<LogCommand, _>(log_command);
     /// #
     /// # /// Prints given arguments to the console.
     /// # #[derive(ConsoleCommand)]
@@ -463,22 +467,17 @@ pub trait AddConsoleCommand {
     /// #
     /// # fn log_command(mut log: ConsoleCommand<LogCommand>) {}
     /// ```
-    fn add_console_command<T: CommandName + CommandHelp, Sys, Params>(
+    fn add_console_command<T: Command, Params>(
         &mut self,
-        system: Sys,
-    ) -> &mut Self
-    where
-        Sys: IntoSystemDescriptor<Params>;
+        system: impl IntoSystemDescriptor<Params>,
+    ) -> &mut Self;
 }
 
 impl AddConsoleCommand for App {
-    fn add_console_command<T: CommandName + CommandHelp, Sys, Params>(
+    fn add_console_command<T: Command, Params>(
         &mut self,
-        system: Sys,
-    ) -> &mut Self
-    where
-        Sys: IntoSystemDescriptor<Params>,
-    {
+        system: impl IntoSystemDescriptor<Params>,
+    ) -> &mut Self {
         let sys = move |mut config: ResMut<ConsoleConfiguration>| {
             let name = T::command_name();
             if config.commands.contains_key(name) {
@@ -495,12 +494,13 @@ impl AddConsoleCommand for App {
 }
 
 /// Console open state
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct ConsoleOpen {
     /// Console open
     pub open: bool,
 }
 
+#[derive(Resource)]
 pub(crate) struct ConsoleState {
     pub(crate) buf: String,
     pub(crate) scrollback: Vec<String>,
@@ -577,7 +577,7 @@ pub(crate) fn console_ui(
                         if state.buf.trim().is_empty() {
                             state.scrollback.push(String::new());
                         } else {
-                            let msg = format!("$ {}", state.buf);
+                            let msg = format!("{}{}", config.symbol, state.buf);
                             state.scrollback.push(msg);
                             let cmd_string = state.buf.clone();
                             state.history.insert(1, cmd_string);

@@ -96,7 +96,7 @@ enum StringFragment<'a> {
 
 /// Combine parse_literal, parse_escaped_whitespace, and parse_escaped_char
 /// into a StringFragment.
-fn parse_fragment<'a>(input: &'a str) -> IResult<&str, StringFragment<'a>> {
+fn parse_fragment(input: &str) -> IResult<&str, StringFragment> {
     alt((
         // The `map` combinator runs a parser, then applies a function to the output
         // of that parser.

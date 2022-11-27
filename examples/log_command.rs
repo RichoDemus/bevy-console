@@ -5,7 +5,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(ConsolePlugin)
-        .add_console_command::<LogCommand, _, _>(log_command)
+        .add_console_command::<LogCommand, _>(log_command)
         .run();
 }
 
@@ -20,7 +20,7 @@ struct LogCommand {
 }
 
 fn log_command(mut log: ConsoleCommand<LogCommand>) {
-    if let Some(LogCommand { msg, num }) = log.take() {
+    if let Some(Ok(LogCommand { msg, num })) = log.take() {
         let repeat_count = num.unwrap_or(1);
 
         for _ in 0..repeat_count {

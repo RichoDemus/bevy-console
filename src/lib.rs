@@ -1,7 +1,7 @@
 #![doc = include_str ! ("../README.md")]
 #![deny(missing_docs)]
 
-use bevy::prelude::*;
+use bevy::prelude::{App, IntoSystemDescriptor, Plugin};
 pub use bevy_console_derive::ConsoleCommand;
 pub use bevy_console_parser::{Value, ValueRawOwned};
 use bevy_egui::{EguiContext, EguiPlugin};
@@ -15,10 +15,12 @@ pub use crate::console::{
     ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration, ConsoleOpen, PrintConsoleLine,
     ToggleConsoleKey,
 };
-pub use crate::value::{FromValue, FromValueError, ValueType};
+pub use crate::error::FromValueError;
+pub use crate::value::{FromValue, ValueType};
 
 mod commands;
 mod console;
+mod error;
 mod macros;
 mod value;
 
@@ -32,10 +34,10 @@ impl Plugin for ConsolePlugin {
             .init_resource::<ConsoleOpen>()
             .add_event::<ConsoleCommandEntered>()
             .add_event::<PrintConsoleLine>()
-            .add_console_command::<ClearCommand, _, _>(clear_command)
-            .add_console_command::<ExitCommand, _, _>(exit_command)
-            .add_console_command::<HelpCommand, _, _>(help_command)
-            .add_system(console_ui.exclusive_system())
+            .add_console_command::<ClearCommand, _>(clear_command)
+            .add_console_command::<ExitCommand, _>(exit_command)
+            .add_console_command::<HelpCommand, _>(help_command)
+            .add_system(console_ui.at_end())
             .add_system(receive_console_line);
 
         // Don't create an egui context if one already exists.
