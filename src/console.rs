@@ -439,7 +439,7 @@ impl Default for ConsoleConfiguration {
             width: 800.0,
             commands: BTreeMap::new(),
             history_size: 20,
-            symbol: "$ ".to_owned()
+            symbol: "$ ".to_owned(),
         }
     }
 }
