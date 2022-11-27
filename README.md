@@ -17,6 +17,7 @@ use bevy_console::{ConsoleConfiguration, ConsolePlugin};
 
 fn main() {
     App::new()
+        .add_plugins(DefaultPlugins)
         .add_plugin(ConsolePlugin)
         .insert_resource(ConsoleConfiguration {
             // override config here
@@ -35,6 +36,7 @@ use bevy_console::{reply, AddConsoleCommand, ConsoleCommand, ConsolePlugin};
 
 fn main() {
     App::new()
+        .add_plugins(DefaultPlugins)
         .add_plugin(ConsolePlugin)
         .add_console_command::<ExampleCommand, _, _>(example_command);
 }

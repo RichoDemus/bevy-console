@@ -182,6 +182,9 @@ pub fn derive_console_command(input: TokenStream) -> TokenStream {
                 })
             }
         }
+
+        #[automatically_derived]
+        impl bevy::prelude::Resource for #ident {}
     })
 }
 

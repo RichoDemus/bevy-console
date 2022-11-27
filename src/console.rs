@@ -409,7 +409,7 @@ pub enum ToggleConsoleKey {
 }
 
 /// Console configuration
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub struct ConsoleConfiguration {
     /// Registered keys for toggling the console
     pub keys: Vec<ToggleConsoleKey>,
@@ -498,12 +498,13 @@ impl AddConsoleCommand for App {
 }
 
 /// Console open state
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct ConsoleOpen {
     /// Console open
     pub open: bool,
 }
 
+#[derive(Resource)]
 pub(crate) struct ConsoleState {
     pub(crate) buf: String,
     pub(crate) scrollback: Vec<String>,

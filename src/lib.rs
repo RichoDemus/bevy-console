@@ -1,7 +1,7 @@
 #![doc = include_str ! ("../README.md")]
 #![deny(missing_docs)]
 
-use bevy::prelude::*;
+use bevy::prelude::{App, IntoSystemDescriptor, Plugin};
 pub use bevy_console_derive::ConsoleCommand;
 pub use bevy_console_parser::{Value, ValueRawOwned};
 use bevy_egui::{EguiContext, EguiPlugin};
@@ -35,7 +35,7 @@ impl Plugin for ConsolePlugin {
             .add_console_command::<ClearCommand, _, _>(clear_command)
             .add_console_command::<ExitCommand, _, _>(exit_command)
             .add_console_command::<HelpCommand, _, _>(help_command)
-            .add_system(console_ui.exclusive_system())
+            .add_system(console_ui.at_end())
             .add_system(receive_console_line);
 
         // Don't create an egui context if one already exists.
