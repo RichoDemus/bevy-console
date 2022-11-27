@@ -12,8 +12,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: install some deps
-        run: sudo apt install libasound2-dev libudev-dev
+      - name: Install alsa and udev
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
       - name: Load cargo cache
         uses: actions/cache@v2
         with:
