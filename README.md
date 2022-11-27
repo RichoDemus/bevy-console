@@ -38,7 +38,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(ConsolePlugin)
-        .add_console_command::<ExampleCommand, _, _>(example_command);
+        .add_console_command::<ExampleCommand, _>(example_command);
 }
 
 /// Example command

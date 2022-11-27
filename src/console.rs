@@ -23,6 +23,11 @@ type ConsoleCommandEnteredReaderState =
 type PrintConsoleLineWriterState =
     <EventWriter<'static, 'static, PrintConsoleLine> as SystemParam>::Fetch;
 
+/// Super trait aggregating Resource, CommandName, CommandArgs and CommandHelp traits
+pub trait Command: Resource + CommandArgs + CommandHelp + CommandName {}
+
+impl<T: Resource + CommandArgs + CommandHelp + CommandName> Command for T {}
+
 /// Console command name.
 ///
 /// # Example
@@ -241,13 +246,13 @@ impl CommandInfo {
 /// }
 ///
 /// fn log_command(mut log: ConsoleCommand<LogCommand>) {
-///     if let Some(LogCommand { msg, num }) = log.take() {
+///     if let Some(Ok(LogCommand { msg, num })) = log.take() {
 ///         log.ok();
 ///     }
 /// }
 /// ```
 pub struct ConsoleCommand<'w, 's, T> {
-    command: Option<T>,
+    command: Option<Result<T, FromValueError>>,
     console_line: EventWriter<'w, 's, PrintConsoleLine>,
 }
 
@@ -256,7 +261,7 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
     ///
     /// This method should only be called once.
     /// Consecutive calls will return None regardless if the command occured.
-    pub fn take(&mut self) -> Option<T> {
+    pub fn take(&mut self) -> Option<Result<T, FromValueError>> {
         mem::take(&mut self.command)
     }
 
@@ -303,9 +308,7 @@ pub struct ConsoleCommandState<T> {
     marker: PhantomData<T>,
 }
 
-impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParam
-    for ConsoleCommand<'w, 's, T>
-{
+impl<'w, 's, T: Command> SystemParam for ConsoleCommand<'w, 's, T> {
     type Fetch = ConsoleCommandState<T>;
 }
 
@@ -322,9 +325,7 @@ unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
     }
 }
 
-impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamFetch<'w, 's>
-    for ConsoleCommandState<T>
-{
+impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
     type Item = ConsoleCommand<'w, 's, T>;
 
     #[inline]
@@ -351,8 +352,8 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamF
             .iter()
             .find(|cmd| cmd.command == T::command_name())
             .map(|cmd| T::from_values(&cmd.args))
-            .and_then(|result| match result {
-                Ok(value) => Some(value),
+            .map(|result| match result {
+                Ok(value) => Ok(value),
                 Err(err) => {
                     console_line.send(PrintConsoleLine::new(err.to_string()));
                     match err {
@@ -365,7 +366,7 @@ impl<'w, 's, T: Resource + CommandName + CommandArgs + CommandHelp> SystemParamF
                         }
                         FromValueError::ValueTooLarge { .. } => {}
                     }
-                    None
+                    Err(err)
                 }
             });
 
@@ -457,7 +458,7 @@ pub trait AddConsoleCommand {
     /// # use bevy_console::{AddConsoleCommand, ConsoleCommand};
     /// #
     /// App::new()
-    ///     .add_console_command::<LogCommand, _, _>(log_command);
+    ///     .add_console_command::<LogCommand, _>(log_command);
     /// #
     /// # /// Prints given arguments to the console.
     /// # #[derive(ConsoleCommand)]
@@ -466,22 +467,17 @@ pub trait AddConsoleCommand {
     /// #
     /// # fn log_command(mut log: ConsoleCommand<LogCommand>) {}
     /// ```
-    fn add_console_command<T: CommandName + CommandHelp, Sys, Params>(
+    fn add_console_command<T: Command, Params>(
         &mut self,
-        system: Sys,
-    ) -> &mut Self
-    where
-        Sys: IntoSystemDescriptor<Params>;
+        system: impl IntoSystemDescriptor<Params>,
+    ) -> &mut Self;
 }
 
 impl AddConsoleCommand for App {
-    fn add_console_command<T: CommandName + CommandHelp, Sys, Params>(
+    fn add_console_command<T: Command, Params>(
         &mut self,
-        system: Sys,
-    ) -> &mut Self
-    where
-        Sys: IntoSystemDescriptor<Params>,
-    {
+        system: impl IntoSystemDescriptor<Params>,
+    ) -> &mut Self {
         let sys = move |mut config: ResMut<ConsoleConfiguration>| {
             let name = T::command_name();
             if config.commands.contains_key(name) {
