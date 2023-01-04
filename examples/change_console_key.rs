@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_console::{ConsoleConfiguration, ConsolePlugin, ToggleConsoleKey};
+use clap::Parser;
 
 fn main() {
     App::new()

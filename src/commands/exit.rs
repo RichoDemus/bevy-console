@@ -1,12 +1,13 @@
 use bevy::app::AppExit;
 use bevy::prelude::*;
+use clap::Parser;
 
 use crate as bevy_console;
 use crate::ConsoleCommand;
 
 /// Exits the app
-#[derive(ConsoleCommand)]
-#[console_command(name = "exit")]
+#[derive(Resource, Parser)]
+#[command(name = "exit")]
 pub(crate) struct ExitCommand;
 
 pub(crate) fn exit_command(

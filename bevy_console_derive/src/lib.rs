@@ -1,7 +1,7 @@
 use better_bae::{FromAttributes, TryFromAttributes};
 use proc_macro::{Span, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{parse_macro_input, spanned::Spanned, DeriveInput};
+use syn::{parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned, DeriveInput};
 
 #[derive(Debug, Eq, PartialEq, FromAttributes)]
 #[bae("console_command")]
@@ -36,6 +36,7 @@ struct ConsoleCommandContainerAttr {
 ///     num: Option<i64>,
 /// }
 /// ```
+#[deprecated(since = "0.6.0", note = "please use the clap based macro")]
 #[proc_macro_derive(ConsoleCommand, attributes(console_command))]
 pub fn derive_console_command(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -248,4 +249,37 @@ fn ty_to_string(ty: &syn::Type) -> Option<&'static str> {
         "bool" => Some("bool"),
         _ => None,
     }
+}
+
+#[proc_macro_derive(ClapConsoleCommand, attributes(command))]
+pub fn derive_clap_command(input: TokenStream) -> TokenStream {
+    let mut derive_input = parse_macro_input!(input as DeriveInput);
+
+    transform_input_for_clap(&mut derive_input);
+
+    TokenStream::from(quote! {
+        #[derive(clap::Parser)]
+        #derive_input
+    })
+}
+
+/// Transforms macro invocation to conform with the clap invocation format, performs input validation as well
+fn transform_input_for_clap(input: &mut DeriveInput) -> Result<(), syn::Error> {
+    // input
+    //     .attrs
+    //     .iter()
+    //     .find_map(|attr| {
+    //         attr.path.is_ident("console_command").then(|| {
+    //             let mut new_attr = attr.clone();
+    //             new_attr.path = syn::Path {
+    //                 leading_colon: None,
+    //                 segments: Punctuated::new().push(value),
+    //             }
+    //         })
+    //     })
+    //     .ok_or_else(|| {
+    //         syn::Error::new_spanned(&input, "Expected `console_command` attributes, none found.")
+    //     })?;
+
+    Ok(())
 }
