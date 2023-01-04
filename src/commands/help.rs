@@ -5,11 +5,10 @@ use crate as bevy_console;
 use crate::{reply, ConsoleCommand, ConsoleConfiguration};
 
 /// Prints available arguments and usage
-#[derive(Resource, Parser)]
+#[derive(Resource, Parser, ConsoleCommand)]
 #[command(name = "help")]
 pub(crate) struct HelpCommand {
     /// Help for a given command
-    #[arg(long, short)]
     command: Option<String>,
 }
 
@@ -28,6 +27,7 @@ pub(crate) fn help_command(
             }
         },
         Some(Ok(HelpCommand { command: None })) => {
+            debug!("No command received in help");
             reply!(help, "Available commands:");
             let longest_command_name = config
                 .commands

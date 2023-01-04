@@ -2,10 +2,11 @@ use bevy::prelude::*;
 
 use crate as bevy_console;
 use crate::console::ConsoleState;
-use crate::{ClapConsoleCommand, ConsoleCommand};
+use crate::ConsoleCommand;
+use clap::Parser;
 
 /// Clears the console
-#[derive(Resource, clap::Parser)]
+#[derive(Resource, Parser, ConsoleCommand)]
 #[command(name = "clear")]
 pub(crate) struct ClearCommand;
 
@@ -17,9 +18,3 @@ pub(crate) fn clear_command(
         state.scrollback.clear();
     }
 }
-
-use clap::Parser;
-
-#[derive(Parser)]
-#[command(author,version,about,long_about = None)]
-pub(crate) struct DummyCommand;

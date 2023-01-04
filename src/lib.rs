@@ -2,7 +2,7 @@
 #![deny(missing_docs)]
 
 use bevy::prelude::{App, IntoSystemDescriptor, Plugin};
-pub use bevy_console_derive::{ClapConsoleCommand, ConsoleCommand};
+pub use bevy_console_derive::ConsoleCommand;
 pub use bevy_console_parser::{Value, ValueRawOwned};
 use bevy_egui::{EguiContext, EguiPlugin};
 
@@ -11,7 +11,7 @@ use crate::commands::exit::{exit_command, ExitCommand};
 use crate::commands::help::{help_command, HelpCommand};
 pub use crate::console::{
     AddConsoleCommand, Command, ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration,
-    ConsoleOpen, PrintConsoleLine, ToggleConsoleKey,
+    ConsoleOpen, NamedCommand, PrintConsoleLine, ToggleConsoleKey,
 };
 
 use crate::console::{console_ui, receive_console_line, ConsoleState};

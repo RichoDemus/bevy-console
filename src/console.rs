@@ -1,6 +1,6 @@
 use bevy::ecs::{
     schedule::IntoSystemDescriptor,
-    system::{Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
+    system::{ResState, Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_console_parser::{parse_console_command, ValueRawOwned};
@@ -28,8 +28,14 @@ type PrintConsoleLineWriterState =
     <EventWriter<'static, 'static, PrintConsoleLine> as SystemParam>::Fetch;
 
 /// A super-trait for command like structures
-pub trait Command: CommandFactory + FromArgMatches + Sized + Resource {}
-impl<T: CommandFactory + FromArgMatches + Sized + Resource> Command for T {}
+pub trait Command: NamedCommand + CommandFactory + FromArgMatches + Sized + Resource {}
+impl<T: NamedCommand + CommandFactory + FromArgMatches + Sized + Resource> Command for T {}
+
+/// Trait used to allow uniquely identifying commands at compile time
+pub trait NamedCommand {
+    /// Return the unique command identifier (same as the command "executable")
+    fn name() -> &'static str;
+}
 
 /// Executed parsed console command.
 ///
@@ -122,7 +128,6 @@ unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
     fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
         let event_reader = ConsoleCommandEnteredReaderState::init(world, system_meta);
         let console_line = PrintConsoleLineWriterState::init(world, system_meta);
-
         ConsoleCommandState {
             event_reader,
             console_line,
@@ -154,25 +159,30 @@ impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
             change_tick,
         );
 
-        let command = event_reader
-            .iter()
-            .map(|command| {
-                let entered_command = &command.command;
-                debug!("enter");
-                entered_command
-                    .clone() // this may be too much but hopefully isn't run that often (usually only one event very rarely frames-wise)
-                    .try_get_matches_from(command.args.iter())
-                    .and_then(|matches| {
-                        debug!("middle");
-                        T::from_arg_matches(&matches)
-                    })
-                    .map_err(|err| {
-                        console_line.send(PrintConsoleLine::new(err.to_string()));
-                        err
-                    })
-            })
-            .next();
-        debug!("exit");
+        let command = event_reader.iter().find_map(|command| {
+            if T::name() == command.command_name {
+                Some(
+                    T::command() // this may be too much but hopefully isn't run that often (usually only one event very rarely frames-wise)
+                        .try_get_matches_from(command.args.iter())
+                        .and_then(|matches| T::from_arg_matches(&matches))
+                        .map_err(|err| {
+                            console_line.send(PrintConsoleLine::new(err.to_string()));
+                            err
+                        }),
+                )
+            } else {
+                None
+            }
+        });
+
+        if command.is_some() {
+            debug!(
+                "Parsing command as `{}`, success: `{:?}`",
+                T::name(),
+                command.as_ref().map(|r| r.is_ok())
+            );
+        }
+
         ConsoleCommand {
             command,
             console_line,
@@ -184,7 +194,7 @@ impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
 #[derive(Clone, Debug)]
 pub struct ConsoleCommandEntered {
     /// the command definition
-    pub command: clap::Command,
+    pub command_name: String,
     /// Raw parsed arguments
     pub args: Vec<String>,
 }
@@ -226,7 +236,7 @@ pub struct ConsoleConfiguration {
     /// Console width
     pub width: f32,
     /// Registered console commands
-    pub commands: BTreeMap<Cow<'static, str>, clap::Command>,
+    pub commands: BTreeMap<&'static str, clap::Command>,
     /// Number of commands to store in history
     pub history_size: usize,
     ///Line prefix symbol
@@ -282,15 +292,15 @@ impl AddConsoleCommand for App {
         system: impl IntoSystemDescriptor<Params>,
     ) -> &mut Self {
         let sys = move |mut config: ResMut<ConsoleConfiguration>| {
-            let command = T::command();
-            let name = command.get_name();
+            let command = T::command().no_binary_name(true);
+            let name = T::name();
             if config.commands.contains_key(name) {
                 warn!(
                     "console command '{}' already registered and was overwritten",
                     name
                 );
             }
-            config.commands.insert(Cow::Owned(name.to_owned()), command);
+            config.commands.insert(name, command);
         };
 
         self.add_startup_system(sys).add_system(system)
@@ -389,28 +399,33 @@ pub(crate) fn console_ui(
                                 state.history.pop_back();
                             }
 
-                            let args = state
+                            let mut raw_input = state
                                 .buf
                                 .split_ascii_whitespace()
                                 .map(ToOwned::to_owned)
                                 .collect::<Vec<_>>();
 
-                            _ = args
-                                .first()
-                                .cloned()
-                                .map(|command_name| {
-                                    let command = config
-                                        .commands
-                                        .get(command_name.as_str())
-                                        .cloned()
-                                        .unwrap_or_else(|| clap::Command::new(""));
+                            if !raw_input.is_empty() {
+                                let command_name = raw_input.remove(0);
+                                debug!(
+                                    "Command entered: `{command_name}`, with args: `{raw_input:?}`"
+                                );
 
-                                    command_entered.send(ConsoleCommandEntered { command, args });
-                                })
-                                .or_else(|| {
+                                let command = config.commands.get(command_name.as_str());
+
+                                if command.is_some() {
+                                    command_entered.send(ConsoleCommandEntered {
+                                        command_name,
+                                        args: raw_input,
+                                    });
+                                } else {
+                                    debug!(
+                                        "Command not recognized, recognized commands: `{:?}`",
+                                        config.commands.keys().collect::<Vec<_>>()
+                                    );
                                     state.scrollback.push("[error] invalid command".to_string());
-                                    Some(())
-                                });
+                                }
+                            }
 
                             state.buf.clear();
                         }

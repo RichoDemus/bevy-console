@@ -6,7 +6,7 @@ use crate as bevy_console;
 use crate::ConsoleCommand;
 
 /// Exits the app
-#[derive(Resource, Parser)]
+#[derive(Resource, Parser, ConsoleCommand)]
 #[command(name = "exit")]
 pub(crate) struct ExitCommand;
 
