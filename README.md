@@ -1,7 +1,7 @@
 # bevy_console
 [![Check](https://github.com/RichoDemus/bevy-console/actions/workflows/build.yaml/badge.svg)](https://github.com/RichoDemus/bevy-console/actions/workflows/build.yaml)
 
-A simple half-life inspired console with support for argument parsing.
+A simple half-life inspired console with support for argument parsing powered by `clap`.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/richodemus/bevy-console/main/doc/screenshot.png" width="100%">
@@ -26,7 +26,7 @@ fn main() {
 }
 ```
 
-Create a console command struct and system and add it to your app with `.add_console_command`.
+Create a console command struct and system and add it to your app with `.add_console_command`. Commands are created like clap commands with an additional `CommandName` trait derived via the `ConsoleCommand` derive.
 
 Add [doc comments](https://doc.rust-lang.org/rust-by-example/meta/doc.html#doc-comments) to your command to provide help information in the console.
 
