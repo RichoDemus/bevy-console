@@ -10,12 +10,10 @@ use bevy_egui::{
     egui::{self, Align, ScrollArea, TextEdit},
     EguiContext,
 };
-use clap::{CommandFactory, FromArgMatches};
+use clap::{builder::StyledStr, CommandFactory, FromArgMatches};
 use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::mem;
-
-use crate::{color::style_richtext, Style, StyledStr};
 
 type ConsoleCommandEnteredReaderState =
     <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
@@ -75,20 +73,13 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
 
     /// Print `[ok]` in the console.
     pub fn ok(&mut self) {
-        self.console_line
-            .send(PrintConsoleLine::new(StyledStr::new_styled(
-                Style::Good,
-                "[ok]",
-            )));
+        self.console_line.send(PrintConsoleLine::new("[ok]".into()));
     }
 
     /// Print `[failed]` in the console.
     pub fn failed(&mut self) {
         self.console_line
-            .send(PrintConsoleLine::new(StyledStr::new_styled(
-                Style::Error,
-                "[failed]",
-            )));
+            .send(PrintConsoleLine::new("[failed]".into()));
     }
 
     /// Print a reply in the console.
@@ -163,9 +154,8 @@ impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
 
         let command = event_reader.iter().find_map(|command| {
             if T::name() == command.command_name {
-                let clap_command = T::command()
-                    .no_binary_name(true)
-                    .color(clap::ColorChoice::Always);
+                let clap_command = T::command().no_binary_name(true);
+                // .color(clap::ColorChoice::Always);
                 let arg_matches = clap_command.try_get_matches_from(command.args.iter());
 
                 debug!(
@@ -178,7 +168,7 @@ impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
                         return Some(T::from_arg_matches(&matches));
                     }
                     Err(err) => {
-                        console_line.send(PrintConsoleLine::new(err.render().into()));
+                        console_line.send(PrintConsoleLine::new(err.render()));
                         return Some(Err(err));
                     }
                 }
@@ -295,9 +285,8 @@ impl AddConsoleCommand for App {
         system: impl IntoSystemDescriptor<Params>,
     ) -> &mut Self {
         let sys = move |mut config: ResMut<ConsoleConfiguration>| {
-            let command = T::command()
-                .no_binary_name(true)
-                .color(clap::ColorChoice::Always);
+            let command = T::command().no_binary_name(true);
+            // .color(clap::ColorChoice::Always);
             let name = T::name();
             if config.commands.contains_key(name) {
                 warn!(
@@ -373,19 +362,12 @@ pub(crate) fn console_ui(
                                 for line in &state.scrollback {
                                     let mut text = LayoutJob::default();
 
-                                    for (style, line) in line.iter() {
-                                        text.append(
-                                            line,
-                                            0f32,
-                                            style_richtext(
-                                                style,
-                                                TextFormat::simple(
-                                                    FontId::monospace(14f32),
-                                                    Color32::GRAY,
-                                                ),
-                                            ),
-                                        )
-                                    }
+                                    text.append(
+                                        &line.to_string(), //TOOD: once clap supports custom styling use it here
+                                        0f32,
+                                        TextFormat::simple(FontId::monospace(14f32), Color32::GRAY),
+                                    );
+
                                     ui.label(text);
                                 }
                             });
@@ -443,11 +425,8 @@ pub(crate) fn console_ui(
                                         "Command not recognized, recognized commands: `{:?}`",
                                         config.commands.keys().collect::<Vec<_>>()
                                     );
-                                    let mut message =
-                                        StyledStr::new_styled(Style::Error, "error: ");
-                                    message.none(" Invalid command");
 
-                                    state.scrollback.push(message);
+                                    state.scrollback.push("error: Invalid command".into());
                                 }
                             }
 
