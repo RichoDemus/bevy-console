@@ -5,7 +5,7 @@ use crate as bevy_console;
 use crate::{reply, ConsoleCommand, ConsoleConfiguration};
 
 /// Prints available arguments and usage
-#[derive(Resource, Parser, ConsoleCommand)]
+#[derive(Parser, ConsoleCommand)]
 #[command(name = "help")]
 pub(crate) struct HelpCommand {
     /// Help for a given command

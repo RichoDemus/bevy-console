@@ -11,7 +11,7 @@ fn main() {
 }
 
 /// Prints given arguments to the console
-#[derive(Resource, Parser, ConsoleCommand)]
+#[derive(Parser, ConsoleCommand)]
 #[command(name = "log")]
 struct LogCommand {
     /// Message to print

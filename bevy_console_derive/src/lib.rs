@@ -17,6 +17,8 @@ pub fn derive_clap_command(input: TokenStream) -> TokenStream {
                 #name_string
             }
         }
+
+        impl #impl_generics bevy::prelude::Resource for #name #ty_generics #where_clause {};
     })
 }
 

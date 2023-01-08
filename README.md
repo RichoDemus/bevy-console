@@ -33,6 +33,7 @@ Add [doc comments](https://doc.rust-lang.org/rust-by-example/meta/doc.html#doc-c
 ```rust, ignore
 use bevy::prelude::*;
 use bevy_console::{reply, AddConsoleCommand, ConsoleCommand, ConsolePlugin};
+use clap::Parser;
 
 fn main() {
     App::new()
@@ -42,7 +43,7 @@ fn main() {
 }
 
 /// Example command
-#[derive(ConsoleCommand)]
+#[derive(Parser, ConsoleCommand)]
 #[console_command(name = "example")]
 struct ExampleCommand {
     /// Some message

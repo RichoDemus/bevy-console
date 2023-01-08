@@ -6,7 +6,7 @@ use crate::ConsoleCommand;
 use clap::Parser;
 
 /// Clears the console
-#[derive(Resource, Parser, ConsoleCommand)]
+#[derive(Parser, ConsoleCommand)]
 #[command(name = "clear")]
 pub(crate) struct ClearCommand;
 
