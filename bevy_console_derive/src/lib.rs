@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
-use quote::{__private::ext::RepToTokensExt, quote};
-use syn::{parse_macro_input, parse_quote, DeriveInput};
+use quote::quote;
+use syn::{parse_macro_input, DeriveInput};
 
 #[proc_macro_derive(ConsoleCommand, attributes(command))]
 pub fn derive_clap_command(input: TokenStream) -> TokenStream {

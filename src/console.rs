@@ -1,24 +1,21 @@
 use bevy::ecs::{
     schedule::IntoSystemDescriptor,
-    system::{ResState, Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
+    system::{Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_egui::egui::{epaint::text::cursor::CCursor, Color32, FontId, TextFormat};
 use bevy_egui::egui::{text::LayoutJob, text_edit::CCursorRange};
 use bevy_egui::egui::{Context, Id};
 use bevy_egui::{
-    egui::{self, Align, RichText, ScrollArea, TextEdit},
+    egui::{self, Align, ScrollArea, TextEdit},
     EguiContext,
 };
-use clap::{builder::StyledStr, ArgMatches, CommandFactory, FromArgMatches};
+use clap::{CommandFactory, FromArgMatches};
+use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, VecDeque},
-};
-use std::{fmt::Write, mem};
+use std::mem;
 
-use crate::color::style_richtext;
+use crate::{color::style_richtext, Style, StyledStr};
 
 type ConsoleCommandEnteredReaderState =
     <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
@@ -78,13 +75,20 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
 
     /// Print `[ok]` in the console.
     pub fn ok(&mut self) {
-        self.console_line.send(PrintConsoleLine::new("[ok]".into()));
+        self.console_line
+            .send(PrintConsoleLine::new(StyledStr::new_styled(
+                Style::Good,
+                "[ok]",
+            )));
     }
 
     /// Print `[failed]` in the console.
     pub fn failed(&mut self) {
         self.console_line
-            .send(PrintConsoleLine::new("[failed]".into()));
+            .send(PrintConsoleLine::new(StyledStr::new_styled(
+                Style::Error,
+                "[failed]",
+            )));
     }
 
     /// Print a reply in the console.
@@ -122,7 +126,7 @@ impl<'w, 's, T: Command> SystemParam for ConsoleCommand<'w, 's, T> {
     type Fetch = ConsoleCommandState<T>;
 }
 
-unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
+unsafe impl<T: Resource> SystemParamState for ConsoleCommandState<T> {
     fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
         let event_reader = ConsoleCommandEnteredReaderState::init(world, system_meta);
         let console_line = PrintConsoleLineWriterState::init(world, system_meta);
@@ -174,7 +178,7 @@ impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
                         return Some(T::from_arg_matches(&matches));
                     }
                     Err(err) => {
-                        console_line.send(PrintConsoleLine::new(err.render()));
+                        console_line.send(PrintConsoleLine::new(err.render().into()));
                         return Some(Err(err));
                     }
                 }
@@ -369,11 +373,9 @@ pub(crate) fn console_ui(
                                 for line in &state.scrollback {
                                     let mut text = LayoutJob::default();
 
-                                    for (style, line) in
-                                        crate::color::StyledStr::from(line.clone()).into_iter()
-                                    {
+                                    for (style, line) in line.iter() {
                                         text.append(
-                                            &line,
+                                            line,
                                             0f32,
                                             style_richtext(
                                                 style,
@@ -441,7 +443,11 @@ pub(crate) fn console_ui(
                                         "Command not recognized, recognized commands: `{:?}`",
                                         config.commands.keys().collect::<Vec<_>>()
                                     );
-                                    state.scrollback.push("[error] invalid command".into());
+                                    let mut message =
+                                        StyledStr::new_styled(Style::Error, "error: ");
+                                    message.none(" Invalid command");
+
+                                    state.scrollback.push(message);
                                 }
                             }
 

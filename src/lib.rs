@@ -12,6 +12,7 @@ pub use crate::console::{
     AddConsoleCommand, Command, ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration,
     ConsoleOpen, NamedCommand, PrintConsoleLine, ToggleConsoleKey,
 };
+pub use color::{Style, StyledStr};
 
 use crate::console::{console_ui, receive_console_line, ConsoleState};
 
