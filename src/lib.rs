@@ -3,7 +3,6 @@
 
 use bevy::prelude::{App, IntoSystemDescriptor, Plugin};
 pub use bevy_console_derive::ConsoleCommand;
-pub use bevy_console_parser::{Value, ValueRawOwned};
 use bevy_egui::{EguiContext, EguiPlugin};
 
 use crate::commands::clear::{clear_command, ClearCommand};
@@ -15,14 +14,10 @@ pub use crate::console::{
 };
 
 use crate::console::{console_ui, receive_console_line, ConsoleState};
-pub use crate::error::FromValueError;
-pub use crate::value::{FromValue, ValueType};
 
 mod commands;
 mod console;
-mod error;
 mod macros;
-mod value;
 
 /// Console plugin.
 pub struct ConsolePlugin;

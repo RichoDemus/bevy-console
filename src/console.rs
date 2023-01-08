@@ -3,7 +3,6 @@ use bevy::ecs::{
     system::{ResState, Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
-use bevy_console_parser::{parse_console_command, ValueRawOwned};
 use bevy_egui::egui::epaint::text::cursor::CCursor;
 use bevy_egui::egui::text_edit::CCursorRange;
 use bevy_egui::egui::{Context, Id};
@@ -11,15 +10,13 @@ use bevy_egui::{
     egui::{self, Align, RichText, ScrollArea, TextEdit},
     EguiContext,
 };
-use clap::{ArgMatches, CommandFactory, FromArgMatches};
+use clap::{builder::StyledStr, ArgMatches, CommandFactory, FromArgMatches};
 use std::marker::PhantomData;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, VecDeque},
 };
 use std::{fmt::Write, mem};
-
-use crate::FromValueError;
 
 type ConsoleCommandEnteredReaderState =
     <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
@@ -79,27 +76,26 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
 
     /// Print `[ok]` in the console.
     pub fn ok(&mut self) {
-        self.console_line
-            .send(PrintConsoleLine::new("[ok]".to_string()));
+        self.console_line.send(PrintConsoleLine::new("[ok]".into()));
     }
 
     /// Print `[failed]` in the console.
     pub fn failed(&mut self) {
         self.console_line
-            .send(PrintConsoleLine::new("[failed]".to_string()));
+            .send(PrintConsoleLine::new("[failed]".into()));
     }
 
     /// Print a reply in the console.
     ///
     /// See [`reply!`](crate::reply) for usage with the [`format!`] syntax.
-    pub fn reply(&mut self, msg: impl Into<String>) {
+    pub fn reply(&mut self, msg: impl Into<StyledStr>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
     }
 
     /// Print a reply in the console followed by `[ok]`.
     ///
     /// See [`reply_ok!`](crate::reply_ok) for usage with the [`format!`] syntax.
-    pub fn reply_ok(&mut self, msg: impl Into<String>) {
+    pub fn reply_ok(&mut self, msg: impl Into<StyledStr>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
         self.ok();
     }
@@ -107,7 +103,7 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
     /// Print a reply in the console followed by `[failed]`.
     ///
     /// See [`reply_failed!`](crate::reply_failed) for usage with the [`format!`] syntax.
-    pub fn reply_failed(&mut self, msg: impl Into<String>) {
+    pub fn reply_failed(&mut self, msg: impl Into<StyledStr>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
         self.failed();
     }
@@ -161,27 +157,28 @@ impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
 
         let command = event_reader.iter().find_map(|command| {
             if T::name() == command.command_name {
-                Some(
-                    T::command() // this may be too much but hopefully isn't run that often (usually only one event very rarely frames-wise)
-                        .try_get_matches_from(command.args.iter())
-                        .and_then(|matches| T::from_arg_matches(&matches))
-                        .map_err(|err| {
-                            console_line.send(PrintConsoleLine::new(err.to_string()));
-                            err
-                        }),
-                )
-            } else {
-                None
-            }
-        });
+                let clap_command = T::command()
+                    .no_binary_name(true)
+                    .color(clap::ColorChoice::Always);
+                let arg_matches = clap_command.try_get_matches_from(command.args.iter());
 
-        if command.is_some() {
-            debug!(
-                "Parsing command as `{}`, success: `{:?}`",
-                T::name(),
-                command.as_ref().map(|r| r.is_ok())
-            );
-        }
+                debug!(
+                    "Trying to parse as `{}`. Result: {arg_matches:?}",
+                    command.command_name
+                );
+
+                match arg_matches {
+                    Ok(matches) => {
+                        return Some(T::from_arg_matches(&matches));
+                    }
+                    Err(err) => {
+                        console_line.send(PrintConsoleLine::new(err.render()));
+                        return Some(Err(err));
+                    }
+                }
+            }
+            None
+        });
 
         ConsoleCommand {
             command,
@@ -203,12 +200,12 @@ pub struct ConsoleCommandEntered {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrintConsoleLine {
     /// Console line
-    pub line: String,
+    pub line: StyledStr,
 }
 
 impl PrintConsoleLine {
     /// Creates a new console line to print.
-    pub const fn new(line: String) -> Self {
+    pub const fn new(line: StyledStr) -> Self {
         Self { line }
     }
 }
@@ -292,7 +289,9 @@ impl AddConsoleCommand for App {
         system: impl IntoSystemDescriptor<Params>,
     ) -> &mut Self {
         let sys = move |mut config: ResMut<ConsoleConfiguration>| {
-            let command = T::command().no_binary_name(true);
+            let command = T::command()
+                .no_binary_name(true)
+                .color(clap::ColorChoice::Always);
             let name = T::name();
             if config.commands.contains_key(name) {
                 warn!(
@@ -317,8 +316,8 @@ pub struct ConsoleOpen {
 #[derive(Resource)]
 pub(crate) struct ConsoleState {
     pub(crate) buf: String,
-    pub(crate) scrollback: Vec<String>,
-    pub(crate) history: VecDeque<String>,
+    pub(crate) scrollback: Vec<StyledStr>,
+    pub(crate) history: VecDeque<StyledStr>,
     pub(crate) history_index: usize,
 }
 
@@ -327,7 +326,7 @@ impl Default for ConsoleState {
         ConsoleState {
             buf: String::default(),
             scrollback: Vec::new(),
-            history: VecDeque::from([String::new()]),
+            history: VecDeque::from([StyledStr::new()]),
             history_index: 0,
         }
     }
@@ -366,7 +365,7 @@ pub(crate) fn console_ui(
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 for line in &state.scrollback {
-                                    ui.label(RichText::new(line).monospace());
+                                    ui.label(RichText::new(line.to_string()).monospace());
                                 }
                             });
 
@@ -389,12 +388,12 @@ pub(crate) fn console_ui(
                     let text_edit_response = ui.add(text_edit);
                     if text_edit_response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
                         if state.buf.trim().is_empty() {
-                            state.scrollback.push(String::new());
+                            state.scrollback.push(StyledStr::new());
                         } else {
                             let msg = format!("{}{}", config.symbol, state.buf);
-                            state.scrollback.push(msg);
+                            state.scrollback.push(msg.into());
                             let cmd_string = state.buf.clone();
-                            state.history.insert(1, cmd_string);
+                            state.history.insert(1, cmd_string.into());
                             if state.history.len() > config.history_size + 1 {
                                 state.history.pop_back();
                             }
@@ -423,7 +422,8 @@ pub(crate) fn console_ui(
                                         "Command not recognized, recognized commands: `{:?}`",
                                         config.commands.keys().collect::<Vec<_>>()
                                     );
-                                    state.scrollback.push("[error] invalid command".to_string());
+
+                                    state.scrollback.push("[error] invalid command".into());
                                 }
                             }
 
@@ -438,12 +438,12 @@ pub(crate) fn console_ui(
                         && state.history_index < state.history.len() - 1
                     {
                         if state.history_index == 0 && !state.buf.trim().is_empty() {
-                            *state.history.get_mut(0).unwrap() = state.buf.clone();
+                            *state.history.get_mut(0).unwrap() = state.buf.clone().into();
                         }
 
                         state.history_index += 1;
                         let previous_item = state.history.get(state.history_index).unwrap().clone();
-                        state.buf = previous_item;
+                        state.buf = previous_item.to_string();
 
                         set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
                     } else if text_edit_response.has_focus()
@@ -452,7 +452,7 @@ pub(crate) fn console_ui(
                     {
                         state.history_index -= 1;
                         let next_item = state.history.get(state.history_index).unwrap().clone();
-                        state.buf = next_item;
+                        state.buf = next_item.to_string();
 
                         set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
                     }
