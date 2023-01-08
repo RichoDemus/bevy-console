@@ -26,7 +26,8 @@ fn main() {
 }
 ```
 
-Create a console command struct and system and add it to your app with `.add_console_command`. Commands are created like clap commands with an additional `CommandName` trait derived via the `ConsoleCommand` derive.
+Create a console command struct and system and add it to your app with `.add_console_command`.
+ Commands are created like `clap` commands with an additional `CommandName` trait derived via the `ConsoleCommand` derive.
 
 Add [doc comments](https://doc.rust-lang.org/rust-by-example/meta/doc.html#doc-comments) to your command to provide help information in the console.
 
