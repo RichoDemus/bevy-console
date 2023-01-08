@@ -14,7 +14,7 @@ pub(crate) fn clear_command(
     mut clear: ConsoleCommand<ClearCommand>,
     mut state: ResMut<ConsoleState>,
 ) {
-    if clear.take().is_okay() {
+    if let Some(Ok(_)) = exit.take() {
         state.scrollback.clear();
     }
 }
