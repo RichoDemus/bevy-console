@@ -262,13 +262,13 @@ pub trait AddConsoleCommand {
     /// ```
     /// # use bevy::prelude::*;
     /// # use bevy_console::{AddConsoleCommand, ConsoleCommand};
-    /// #
+    /// # use clap::Parser;
     /// App::new()
     ///     .add_console_command::<LogCommand, _>(log_command);
     /// #
     /// # /// Prints given arguments to the console.
-    /// # #[derive(ConsoleCommand)]
-    /// # #[console_command(name = "log")]
+    /// # #[derive(Parser, ConsoleCommand)]
+    /// # #[command(name = "log")]
     /// # struct LogCommand;
     /// #
     /// # fn log_command(mut log: ConsoleCommand<LogCommand>) {}
