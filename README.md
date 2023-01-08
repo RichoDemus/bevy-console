@@ -1,7 +1,7 @@
 # bevy_console
 [![Check](https://github.com/RichoDemus/bevy-console/actions/workflows/build.yaml/badge.svg)](https://github.com/RichoDemus/bevy-console/actions/workflows/build.yaml)
 
-A simple half-life inspired console with support for argument parsing powered by `clap`.
+A simple *Half Life* inspired console with support for argument parsing powered by [`clap`](https://docs.rs/clap/latest/clap/).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/richodemus/bevy-console/main/doc/screenshot.png" width="100%">
