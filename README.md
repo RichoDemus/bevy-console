@@ -44,7 +44,7 @@ fn main() {
 
 /// Example command
 #[derive(Parser, ConsoleCommand)]
-#[console_command(name = "example")]
+#[command(name = "example")]
 struct ExampleCommand {
     /// Some message
     msg: String,
