@@ -3,8 +3,8 @@ use bevy::ecs::{
     system::{ResState, Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
-use bevy_egui::egui::epaint::text::cursor::CCursor;
-use bevy_egui::egui::text_edit::CCursorRange;
+use bevy_egui::egui::{epaint::text::cursor::CCursor, Color32, FontId, TextFormat};
+use bevy_egui::egui::{text::LayoutJob, text_edit::CCursorRange};
 use bevy_egui::egui::{Context, Id};
 use bevy_egui::{
     egui::{self, Align, RichText, ScrollArea, TextEdit},
@@ -17,6 +17,8 @@ use std::{
     collections::{BTreeMap, VecDeque},
 };
 use std::{fmt::Write, mem};
+
+use crate::color::style_richtext;
 
 type ConsoleCommandEnteredReaderState =
     <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
@@ -365,7 +367,24 @@ pub(crate) fn console_ui(
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 for line in &state.scrollback {
-                                    ui.label(RichText::new(line.to_string()).monospace());
+                                    let mut text = LayoutJob::default();
+
+                                    for (style, line) in
+                                        crate::color::StyledStr::from(line.clone()).into_iter()
+                                    {
+                                        text.append(
+                                            &line,
+                                            0f32,
+                                            style_richtext(
+                                                style,
+                                                TextFormat::simple(
+                                                    FontId::monospace(14f32),
+                                                    Color32::GRAY,
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                    ui.label(text);
                                 }
                             });
 
@@ -422,7 +441,6 @@ pub(crate) fn console_ui(
                                         "Command not recognized, recognized commands: `{:?}`",
                                         config.commands.keys().collect::<Vec<_>>()
                                     );
-
                                     state.scrollback.push("[error] invalid command".into());
                                 }
                             }

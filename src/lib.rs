@@ -15,6 +15,7 @@ pub use crate::console::{
 
 use crate::console::{console_ui, receive_console_line, ConsoleState};
 
+mod color;
 mod commands;
 mod console;
 mod macros;
