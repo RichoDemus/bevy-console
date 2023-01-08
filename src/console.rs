@@ -40,10 +40,10 @@ pub trait NamedCommand {
 ///
 /// ```
 /// # use bevy_console::ConsoleCommand;
-/// #
+/// # use clap::Parser
 /// /// Prints given arguments to the console.
-/// #[derive(ConsoleCommand)]
-/// #[console_command(name = "log")]
+/// #[derive(Parser, ConsoleCommand)]
+/// #[command(name = "log")]
 /// struct LogCommand {
 ///     /// Message to print
 ///     msg: String,
