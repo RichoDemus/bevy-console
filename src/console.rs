@@ -3,19 +3,17 @@ use bevy::ecs::{
     system::{Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
-use bevy_console_parser::{parse_console_command, ValueRawOwned};
-use bevy_egui::egui::epaint::text::cursor::CCursor;
-use bevy_egui::egui::text_edit::CCursorRange;
+use bevy_egui::egui::{epaint::text::cursor::CCursor, Color32, FontId, TextFormat};
+use bevy_egui::egui::{text::LayoutJob, text_edit::CCursorRange};
 use bevy_egui::egui::{Context, Id};
 use bevy_egui::{
-    egui::{self, Align, RichText, ScrollArea, TextEdit},
+    egui::{self, Align, ScrollArea, TextEdit},
     EguiContext,
 };
+use clap::{builder::StyledStr, CommandFactory, FromArgMatches};
 use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
-use std::{fmt::Write, mem};
-
-use crate::FromValueError;
+use std::mem;
 
 type ConsoleCommandEnteredReaderState =
     <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
@@ -23,206 +21,14 @@ type ConsoleCommandEnteredReaderState =
 type PrintConsoleLineWriterState =
     <EventWriter<'static, 'static, PrintConsoleLine> as SystemParam>::Fetch;
 
-/// Super trait aggregating Resource, CommandName, CommandArgs and CommandHelp traits
-pub trait Command: Resource + CommandArgs + CommandHelp + CommandName {}
+/// A super-trait for command like structures
+pub trait Command: NamedCommand + CommandFactory + FromArgMatches + Sized + Resource {}
+impl<T: NamedCommand + CommandFactory + FromArgMatches + Sized + Resource> Command for T {}
 
-impl<T: Resource + CommandArgs + CommandHelp + CommandName> Command for T {}
-
-/// Console command name.
-///
-/// # Example
-///
-/// `log "hello"`
-///
-/// ```
-/// # use bevy_console::CommandName;
-/// #
-/// struct LogCommand;
-///
-/// impl CommandName for LogCommand {
-///     fn command_name() -> &'static str {
-///         "log"
-///     }
-/// }
-/// ```
-pub trait CommandName {
-    /// Command name
-    fn command_name() -> &'static str;
-}
-
-/// Parse arguments from values.
-///
-/// # Example
-///
-/// ```
-/// # use bevy_console::{CommandArgs, FromValue, FromValueError, ValueRawOwned};
-/// #
-/// struct LogCommand {
-///     msg: String,
-/// }
-///
-/// impl CommandArgs for LogCommand {
-///     fn from_values(values: &[ValueRawOwned]) -> Result<Self, FromValueError> {
-///         let mut values = values.iter();
-///         let msg = String::from_value_iter(&mut values, 0)?;
-///
-///         Ok(LogCommand {
-///             msg
-///         })
-///     }
-/// }
-/// ```
-pub trait CommandArgs: Sized {
-    /// Parse arguments from values.
-    fn from_values(values: &[ValueRawOwned]) -> Result<Self, FromValueError>;
-}
-
-/// Provides command usage information including description, arguments and their types.
-///
-/// # Example
-///
-/// ```
-/// # use bevy_console::{CommandArgInfo, CommandHelp, CommandInfo, CommandName};
-/// #
-/// struct LogCommand {
-///     msg: String,
-/// }
-/// #
-/// # impl CommandName for LogCommand {
-/// #     fn command_name() -> &'static str {
-/// #         "log"
-/// #     }
-/// # }
-///
-/// impl CommandHelp for LogCommand {
-///     fn command_help() -> Option<CommandInfo> {
-///         Some(CommandInfo {
-///             name: "log".to_string(),
-///             description: Some("Prints a message to the console".to_string()),
-///             args: vec![
-///                 CommandArgInfo {
-///                     name: "msg".to_string(),
-///                     ty: "string".to_string(),
-///                     description: Some("message to print".to_string()),
-///                     optional: false,
-///                 },
-///             ],
-///         })
-///     }
-/// }
-/// ```
-pub trait CommandHelp: CommandName {
-    /// Help for a console command.
-    fn command_help() -> Option<CommandInfo> {
-        None
-    }
-}
-
-/// Command information.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CommandInfo {
-    /// Command name
-    pub name: String,
-    /// Command description
-    pub description: Option<String>,
-    /// Command argument information
-    pub args: Vec<CommandArgInfo>,
-}
-
-/// Command argument information.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CommandArgInfo {
-    /// Argument name
-    pub name: String,
-    /// Argument type as string
-    pub ty: String,
-    /// Argument description
-    pub description: Option<String>,
-    /// Is argument optional
-    pub optional: bool,
-}
-
-impl CommandInfo {
-    /// Compine command help into usage string.
-    #[allow(unused_must_use)]
-    pub fn help_text(&self) -> String {
-        let mut buf = "Usage:\n\n".to_string();
-
-        write!(buf, "  > {}", self.name);
-        for CommandArgInfo { name, optional, .. } in &self.args {
-            write!(buf, " ");
-            if *optional {
-                write!(buf, "[");
-            } else {
-                write!(buf, "<");
-            }
-            write!(buf, "{name}");
-            if *optional {
-                write!(buf, "]");
-            } else {
-                write!(buf, ">");
-            }
-        }
-        writeln!(buf);
-        writeln!(buf);
-
-        if let Some(description) = &self.description {
-            let description = description.lines().fold(String::new(), |mut buf, s| {
-                let spaces = s.chars().take_while(|c| *c == ' ').count();
-                for _ in 0..2usize.saturating_sub(spaces) {
-                    buf.push(' ');
-                }
-                buf.push_str(s);
-                buf.push('\n');
-                buf
-            });
-            writeln!(buf, "{description}");
-        }
-
-        let longest_arg_name = self
-            .args
-            .iter()
-            .map(|arg| arg.name.len())
-            .max()
-            .unwrap_or(0);
-        let longest_arg_ty = self.args.iter().map(|arg| arg.ty.len()).max().unwrap_or(0);
-        for CommandArgInfo {
-            name,
-            ty,
-            description,
-            optional,
-        } in &self.args
-        {
-            write!(
-                buf,
-                "    {name} {}",
-                " ".repeat(longest_arg_name - name.len())
-            );
-            if *optional {
-                write!(buf, "[");
-            } else {
-                write!(buf, "<");
-            }
-            write!(buf, "{ty}");
-            if *optional {
-                write!(buf, "]");
-            } else {
-                write!(buf, ">");
-            }
-            write!(buf, "{}", " ".repeat(longest_arg_ty - ty.len()));
-
-            match description {
-                Some(description) => {
-                    writeln!(buf, "   - {description}");
-                }
-                None => {
-                    writeln!(buf);
-                }
-            }
-        }
-
-        buf
-    }
+/// Trait used to allow uniquely identifying commands at compile time
+pub trait NamedCommand {
+    /// Return the unique command identifier (same as the command "executable")
+    fn name() -> &'static str;
 }
 
 /// Executed parsed console command.
@@ -234,10 +40,10 @@ impl CommandInfo {
 ///
 /// ```
 /// # use bevy_console::ConsoleCommand;
-/// #
+/// # use clap::Parser;
 /// /// Prints given arguments to the console.
-/// #[derive(ConsoleCommand)]
-/// #[console_command(name = "log")]
+/// #[derive(Parser, ConsoleCommand)]
+/// #[command(name = "log")]
 /// struct LogCommand {
 ///     /// Message to print
 ///     msg: String,
@@ -252,7 +58,7 @@ impl CommandInfo {
 /// }
 /// ```
 pub struct ConsoleCommand<'w, 's, T> {
-    command: Option<Result<T, FromValueError>>,
+    command: Option<Result<T, clap::Error>>,
     console_line: EventWriter<'w, 's, PrintConsoleLine>,
 }
 
@@ -261,33 +67,32 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
     ///
     /// This method should only be called once.
     /// Consecutive calls will return None regardless if the command occured.
-    pub fn take(&mut self) -> Option<Result<T, FromValueError>> {
+    pub fn take(&mut self) -> Option<Result<T, clap::Error>> {
         mem::take(&mut self.command)
     }
 
     /// Print `[ok]` in the console.
     pub fn ok(&mut self) {
-        self.console_line
-            .send(PrintConsoleLine::new("[ok]".to_string()));
+        self.console_line.send(PrintConsoleLine::new("[ok]".into()));
     }
 
     /// Print `[failed]` in the console.
     pub fn failed(&mut self) {
         self.console_line
-            .send(PrintConsoleLine::new("[failed]".to_string()));
+            .send(PrintConsoleLine::new("[failed]".into()));
     }
 
     /// Print a reply in the console.
     ///
     /// See [`reply!`](crate::reply) for usage with the [`format!`] syntax.
-    pub fn reply(&mut self, msg: impl Into<String>) {
+    pub fn reply(&mut self, msg: impl Into<StyledStr>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
     }
 
     /// Print a reply in the console followed by `[ok]`.
     ///
     /// See [`reply_ok!`](crate::reply_ok) for usage with the [`format!`] syntax.
-    pub fn reply_ok(&mut self, msg: impl Into<String>) {
+    pub fn reply_ok(&mut self, msg: impl Into<StyledStr>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
         self.ok();
     }
@@ -295,7 +100,7 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
     /// Print a reply in the console followed by `[failed]`.
     ///
     /// See [`reply_failed!`](crate::reply_failed) for usage with the [`format!`] syntax.
-    pub fn reply_failed(&mut self, msg: impl Into<String>) {
+    pub fn reply_failed(&mut self, msg: impl Into<StyledStr>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
         self.failed();
     }
@@ -312,11 +117,10 @@ impl<'w, 's, T: Command> SystemParam for ConsoleCommand<'w, 's, T> {
     type Fetch = ConsoleCommandState<T>;
 }
 
-unsafe impl<'w, 's, T: Resource> SystemParamState for ConsoleCommandState<T> {
+unsafe impl<T: Resource> SystemParamState for ConsoleCommandState<T> {
     fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
         let event_reader = ConsoleCommandEnteredReaderState::init(world, system_meta);
         let console_line = PrintConsoleLineWriterState::init(world, system_meta);
-
         ConsoleCommandState {
             event_reader,
             console_line,
@@ -348,27 +152,29 @@ impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
             change_tick,
         );
 
-        let command = event_reader
-            .iter()
-            .find(|cmd| cmd.command == T::command_name())
-            .map(|cmd| T::from_values(&cmd.args))
-            .map(|result| match result {
-                Ok(value) => Ok(value),
-                Err(err) => {
-                    console_line.send(PrintConsoleLine::new(err.to_string()));
-                    match err {
-                        FromValueError::UnexpectedArgType { .. }
-                        | FromValueError::NotEnoughArgs
-                        | FromValueError::Custom(_) => {
-                            if let Some(help_text) = T::command_help() {
-                                console_line.send(PrintConsoleLine::new(help_text.help_text()));
-                            }
-                        }
-                        FromValueError::ValueTooLarge { .. } => {}
+        let command = event_reader.iter().find_map(|command| {
+            if T::name() == command.command_name {
+                let clap_command = T::command().no_binary_name(true);
+                // .color(clap::ColorChoice::Always);
+                let arg_matches = clap_command.try_get_matches_from(command.args.iter());
+
+                debug!(
+                    "Trying to parse as `{}`. Result: {arg_matches:?}",
+                    command.command_name
+                );
+
+                match arg_matches {
+                    Ok(matches) => {
+                        return Some(T::from_arg_matches(&matches));
                     }
-                    Err(err)
+                    Err(err) => {
+                        console_line.send(PrintConsoleLine::new(err.render()));
+                        return Some(Err(err));
+                    }
                 }
-            });
+            }
+            None
+        });
 
         ConsoleCommand {
             command,
@@ -378,24 +184,24 @@ impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
 }
 
 /// Parsed raw console command into `command` and `args`.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ConsoleCommandEntered {
-    /// Command name
-    pub command: String,
+    /// the command definition
+    pub command_name: String,
     /// Raw parsed arguments
-    pub args: Vec<ValueRawOwned>,
+    pub args: Vec<String>,
 }
 
 /// Events to print to the console.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrintConsoleLine {
     /// Console line
-    pub line: String,
+    pub line: StyledStr,
 }
 
 impl PrintConsoleLine {
     /// Creates a new console line to print.
-    pub const fn new(line: String) -> Self {
+    pub const fn new(line: StyledStr) -> Self {
         Self { line }
     }
 }
@@ -423,7 +229,7 @@ pub struct ConsoleConfiguration {
     /// Console width
     pub width: f32,
     /// Registered console commands
-    pub commands: BTreeMap<&'static str, Option<CommandInfo>>,
+    pub commands: BTreeMap<&'static str, clap::Command>,
     /// Number of commands to store in history
     pub history_size: usize,
     ///Line prefix symbol
@@ -456,13 +262,13 @@ pub trait AddConsoleCommand {
     /// ```
     /// # use bevy::prelude::*;
     /// # use bevy_console::{AddConsoleCommand, ConsoleCommand};
-    /// #
+    /// # use clap::Parser;
     /// App::new()
     ///     .add_console_command::<LogCommand, _>(log_command);
     /// #
     /// # /// Prints given arguments to the console.
-    /// # #[derive(ConsoleCommand)]
-    /// # #[console_command(name = "log")]
+    /// # #[derive(Parser, ConsoleCommand)]
+    /// # #[command(name = "log")]
     /// # struct LogCommand;
     /// #
     /// # fn log_command(mut log: ConsoleCommand<LogCommand>) {}
@@ -479,14 +285,16 @@ impl AddConsoleCommand for App {
         system: impl IntoSystemDescriptor<Params>,
     ) -> &mut Self {
         let sys = move |mut config: ResMut<ConsoleConfiguration>| {
-            let name = T::command_name();
+            let command = T::command().no_binary_name(true);
+            // .color(clap::ColorChoice::Always);
+            let name = T::name();
             if config.commands.contains_key(name) {
                 warn!(
                     "console command '{}' already registered and was overwritten",
                     name
                 );
             }
-            config.commands.insert(name, T::command_help());
+            config.commands.insert(name, command);
         };
 
         self.add_startup_system(sys).add_system(system)
@@ -503,8 +311,8 @@ pub struct ConsoleOpen {
 #[derive(Resource)]
 pub(crate) struct ConsoleState {
     pub(crate) buf: String,
-    pub(crate) scrollback: Vec<String>,
-    pub(crate) history: VecDeque<String>,
+    pub(crate) scrollback: Vec<StyledStr>,
+    pub(crate) history: VecDeque<StyledStr>,
     pub(crate) history_index: usize,
 }
 
@@ -513,7 +321,7 @@ impl Default for ConsoleState {
         ConsoleState {
             buf: String::default(),
             scrollback: Vec::new(),
-            history: VecDeque::from([String::new()]),
+            history: VecDeque::from([StyledStr::new()]),
             history_index: 0,
         }
     }
@@ -552,7 +360,15 @@ pub(crate) fn console_ui(
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 for line in &state.scrollback {
-                                    ui.label(RichText::new(line).monospace());
+                                    let mut text = LayoutJob::default();
+
+                                    text.append(
+                                        &line.to_string(), //TOOD: once clap supports custom styling use it here
+                                        0f32,
+                                        TextFormat::simple(FontId::monospace(14f32), Color32::GRAY),
+                                    );
+
+                                    ui.label(text);
                                 }
                             });
 
@@ -575,33 +391,42 @@ pub(crate) fn console_ui(
                     let text_edit_response = ui.add(text_edit);
                     if text_edit_response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
                         if state.buf.trim().is_empty() {
-                            state.scrollback.push(String::new());
+                            state.scrollback.push(StyledStr::new());
                         } else {
                             let msg = format!("{}{}", config.symbol, state.buf);
-                            state.scrollback.push(msg);
+                            state.scrollback.push(msg.into());
                             let cmd_string = state.buf.clone();
-                            state.history.insert(1, cmd_string);
+                            state.history.insert(1, cmd_string.into());
                             if state.history.len() > config.history_size + 1 {
                                 state.history.pop_back();
                             }
 
-                            match parse_console_command(&state.buf) {
-                                Ok(cmd) => {
-                                    let command = ConsoleCommandEntered {
-                                        command: cmd.command.to_string(),
-                                        args: cmd
-                                            .args
-                                            .into_iter()
-                                            .map(ValueRawOwned::from)
-                                            .collect(),
-                                    };
+                            let mut raw_input = state
+                                .buf
+                                .split_ascii_whitespace()
+                                .map(ToOwned::to_owned)
+                                .collect::<Vec<_>>();
 
-                                    command_entered.send(command);
-                                }
-                                Err(_) => {
-                                    state
-                                        .scrollback
-                                        .push("[error] invalid argument(s)".to_string());
+                            if !raw_input.is_empty() {
+                                let command_name = raw_input.remove(0);
+                                debug!(
+                                    "Command entered: `{command_name}`, with args: `{raw_input:?}`"
+                                );
+
+                                let command = config.commands.get(command_name.as_str());
+
+                                if command.is_some() {
+                                    command_entered.send(ConsoleCommandEntered {
+                                        command_name,
+                                        args: raw_input,
+                                    });
+                                } else {
+                                    debug!(
+                                        "Command not recognized, recognized commands: `{:?}`",
+                                        config.commands.keys().collect::<Vec<_>>()
+                                    );
+
+                                    state.scrollback.push("error: Invalid command".into());
                                 }
                             }
 
@@ -616,12 +441,12 @@ pub(crate) fn console_ui(
                         && state.history_index < state.history.len() - 1
                     {
                         if state.history_index == 0 && !state.buf.trim().is_empty() {
-                            *state.history.get_mut(0).unwrap() = state.buf.clone();
+                            *state.history.get_mut(0).unwrap() = state.buf.clone().into();
                         }
 
                         state.history_index += 1;
                         let previous_item = state.history.get(state.history_index).unwrap().clone();
-                        state.buf = previous_item;
+                        state.buf = previous_item.to_string();
 
                         set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
                     } else if text_edit_response.has_focus()
@@ -630,7 +455,7 @@ pub(crate) fn console_ui(
                     {
                         state.history_index -= 1;
                         let next_item = state.history.get(state.history_index).unwrap().clone();
-                        state.buf = next_item;
+                        state.buf = next_item.to_string();
 
                         set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
                     }

@@ -3,26 +3,23 @@
 
 use bevy::prelude::{App, IntoSystemDescriptor, Plugin};
 pub use bevy_console_derive::ConsoleCommand;
-pub use bevy_console_parser::{Value, ValueRawOwned};
 use bevy_egui::{EguiContext, EguiPlugin};
 
 use crate::commands::clear::{clear_command, ClearCommand};
 use crate::commands::exit::{exit_command, ExitCommand};
 use crate::commands::help::{help_command, HelpCommand};
-use crate::console::{console_ui, receive_console_line, ConsoleState};
 pub use crate::console::{
-    AddConsoleCommand, CommandArgInfo, CommandArgs, CommandHelp, CommandInfo, CommandName,
-    ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration, ConsoleOpen, PrintConsoleLine,
-    ToggleConsoleKey,
+    AddConsoleCommand, Command, ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration,
+    ConsoleOpen, NamedCommand, PrintConsoleLine, ToggleConsoleKey,
 };
-pub use crate::error::FromValueError;
-pub use crate::value::{FromValue, ValueType};
+// pub use color::{Style, StyledStr};
 
+use crate::console::{console_ui, receive_console_line, ConsoleState};
+
+// mod color;
 mod commands;
 mod console;
-mod error;
 mod macros;
-mod value;
 
 /// Console plugin.
 pub struct ConsolePlugin;

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_console::{reply, AddConsoleCommand, ConsoleCommand, ConsolePlugin};
+use clap::Parser;
 
 fn main() {
     App::new()
@@ -10,8 +11,8 @@ fn main() {
 }
 
 /// Prints given arguments to the console
-#[derive(ConsoleCommand)]
-#[console_command(name = "log")]
+#[derive(Parser, ConsoleCommand)]
+#[command(name = "log")]
 struct LogCommand {
     /// Message to print
     msg: String,
