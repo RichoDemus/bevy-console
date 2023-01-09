@@ -52,7 +52,7 @@ struct ExampleCommand {
 }
 
 fn example_command(mut log: ConsoleCommand<ExampleCommand>) {
-    if let Some(ExampleCommand { msg }) = log.take() {
+    if let Some(Ok(ExampleCommand { msg })) = log.take() {
         // handle command
     }
 }
