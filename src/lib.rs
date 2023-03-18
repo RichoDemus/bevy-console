@@ -40,6 +40,11 @@ pub enum ConsoleSet {
     PostCommands,
 }
 
+/// Run condition which does not run any command systems if no command was entered
+fn have_commands(commands: EventReader<ConsoleCommandEntered>) -> bool {
+    !commands.is_empty()
+}
+
 impl Plugin for ConsolePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ConsoleConfiguration>()
@@ -52,7 +57,11 @@ impl Plugin for ConsolePlugin {
             .add_console_command::<HelpCommand, _>(help_command)
             .add_system(console_ui.in_set(ConsoleSet::ConsoleUI))
             .add_system(receive_console_line.in_set(ConsoleSet::PostCommands))
-            .configure_set(ConsoleSet::Commands.after(ConsoleSet::ConsoleUI))
+            .configure_set(
+                ConsoleSet::Commands
+                    .after(ConsoleSet::ConsoleUI)
+                    .run_if(have_commands),
+            )
             .configure_set(ConsoleSet::PostCommands.after(ConsoleSet::Commands));
 
         // Don't initialize an egui plugin if one already exists.
