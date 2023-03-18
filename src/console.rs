@@ -1,25 +1,25 @@
 use bevy::ecs::{
-    schedule::IntoSystemDescriptor,
-    system::{Resource, SystemMeta, SystemParam, SystemParamFetch, SystemParamState},
+    schedule::IntoSystemConfig,
+    system::{Resource, SystemMeta, SystemParam},
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
-use bevy_egui::egui::{epaint::text::cursor::CCursor, Color32, FontId, TextFormat};
+use bevy_egui::egui::{self, Align, ScrollArea, TextEdit};
 use bevy_egui::egui::{text::LayoutJob, text_edit::CCursorRange};
 use bevy_egui::egui::{Context, Id};
 use bevy_egui::{
-    egui::{self, Align, ScrollArea, TextEdit},
-    EguiContext,
+    egui::{epaint::text::cursor::CCursor, Color32, FontId, TextFormat},
+    EguiContexts,
 };
 use clap::{builder::StyledStr, CommandFactory, FromArgMatches};
 use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::mem;
 
-type ConsoleCommandEnteredReaderState =
-    <EventReader<'static, 'static, ConsoleCommandEntered> as SystemParam>::Fetch;
+use crate::ConsoleSet;
 
-type PrintConsoleLineWriterState =
-    <EventWriter<'static, 'static, PrintConsoleLine> as SystemParam>::Fetch;
+type ConsoleCommandEnteredReaderSystemParam = EventReader<'static, 'static, ConsoleCommandEntered>;
+
+type PrintConsoleLineWriterSystemParam = EventWriter<'static, PrintConsoleLine>;
 
 /// A super-trait for command like structures
 pub trait Command: NamedCommand + CommandFactory + FromArgMatches + Sized + Resource {}
@@ -57,12 +57,12 @@ pub trait NamedCommand {
 ///     }
 /// }
 /// ```
-pub struct ConsoleCommand<'w, 's, T> {
+pub struct ConsoleCommand<'w, T> {
     command: Option<Result<T, clap::Error>>,
-    console_line: EventWriter<'w, 's, PrintConsoleLine>,
+    console_line: EventWriter<'w, PrintConsoleLine>,
 }
 
-impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
+impl<'w, T> ConsoleCommand<'w, T> {
     /// Returns Some(T) if the command was executed and arguments were valid.
     ///
     /// This method should only be called once.
@@ -108,44 +108,39 @@ impl<'w, 's, T> ConsoleCommand<'w, 's, T> {
 
 pub struct ConsoleCommandState<T> {
     #[allow(clippy::type_complexity)]
-    event_reader: ConsoleCommandEnteredReaderState,
-    console_line: PrintConsoleLineWriterState,
+    event_reader: <ConsoleCommandEnteredReaderSystemParam as SystemParam>::State,
+    console_line: <PrintConsoleLineWriterSystemParam as SystemParam>::State,
     marker: PhantomData<T>,
 }
 
-impl<'w, 's, T: Command> SystemParam for ConsoleCommand<'w, 's, T> {
-    type Fetch = ConsoleCommandState<T>;
-}
+unsafe impl<T: Command> SystemParam for ConsoleCommand<'_, T> {
+    type State = ConsoleCommandState<T>;
+    type Item<'w, 's> = ConsoleCommand<'w, T>;
 
-unsafe impl<T: Resource> SystemParamState for ConsoleCommandState<T> {
-    fn init(world: &mut World, system_meta: &mut SystemMeta) -> Self {
-        let event_reader = ConsoleCommandEnteredReaderState::init(world, system_meta);
-        let console_line = PrintConsoleLineWriterState::init(world, system_meta);
+    fn init_state(world: &mut World, system_meta: &mut SystemMeta) -> Self::State {
+        let event_reader = ConsoleCommandEnteredReaderSystemParam::init_state(world, system_meta);
+        let console_line = PrintConsoleLineWriterSystemParam::init_state(world, system_meta);
         ConsoleCommandState {
             event_reader,
             console_line,
             marker: PhantomData::default(),
         }
     }
-}
-
-impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
-    type Item = ConsoleCommand<'w, 's, T>;
 
     #[inline]
-    unsafe fn get_param(
-        state: &'s mut Self,
+    unsafe fn get_param<'w, 's>(
+        state: &'s mut Self::State,
         system_meta: &SystemMeta,
         world: &'w World,
         change_tick: u32,
-    ) -> Self::Item {
-        let mut event_reader = ConsoleCommandEnteredReaderState::get_param(
+    ) -> Self::Item<'w, 's> {
+        let mut event_reader = ConsoleCommandEnteredReaderSystemParam::get_param(
             &mut state.event_reader,
             system_meta,
             world,
             change_tick,
         );
-        let mut console_line = PrintConsoleLineWriterState::get_param(
+        let mut console_line = PrintConsoleLineWriterSystemParam::get_param(
             &mut state.console_line,
             system_meta,
             world,
@@ -182,7 +177,6 @@ impl<'w, 's, T: Command> SystemParamFetch<'w, 's> for ConsoleCommandState<T> {
         }
     }
 }
-
 /// Parsed raw console command into `command` and `args`.
 #[derive(Clone, Debug)]
 pub struct ConsoleCommandEntered {
@@ -275,14 +269,14 @@ pub trait AddConsoleCommand {
     /// ```
     fn add_console_command<T: Command, Params>(
         &mut self,
-        system: impl IntoSystemDescriptor<Params>,
+        system: impl IntoSystemConfig<Params>,
     ) -> &mut Self;
 }
 
 impl AddConsoleCommand for App {
     fn add_console_command<T: Command, Params>(
         &mut self,
-        system: impl IntoSystemDescriptor<Params>,
+        system: impl IntoSystemConfig<Params>,
     ) -> &mut Self {
         let sys = move |mut config: ResMut<ConsoleConfiguration>| {
             let command = T::command().no_binary_name(true);
@@ -297,7 +291,8 @@ impl AddConsoleCommand for App {
             config.commands.insert(name, command);
         };
 
-        self.add_startup_system(sys).add_system(system)
+        self.add_startup_system(sys)
+            .add_system(system.in_set(ConsoleSet::Commands))
     }
 }
 
@@ -328,7 +323,7 @@ impl Default for ConsoleState {
 }
 
 pub(crate) fn console_ui(
-    mut egui_context: ResMut<EguiContext>,
+    mut egui_context: EguiContexts,
     config: Res<ConsoleConfiguration>,
     mut keyboard_input_events: EventReader<KeyboardInput>,
     mut state: ResMut<ConsoleState>,
@@ -389,7 +384,9 @@ pub(crate) fn console_ui(
 
                     // Handle enter
                     let text_edit_response = ui.add(text_edit);
-                    if text_edit_response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
+                    if text_edit_response.lost_focus()
+                        && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    {
                         if state.buf.trim().is_empty() {
                             state.scrollback.push(StyledStr::new());
                         } else {
@@ -436,7 +433,7 @@ pub(crate) fn console_ui(
 
                     // Handle up and down through history
                     if text_edit_response.has_focus()
-                        && ui.input().key_pressed(egui::Key::ArrowUp)
+                        && ui.input(|i| i.key_pressed(egui::Key::ArrowUp))
                         && state.history.len() > 1
                         && state.history_index < state.history.len() - 1
                     {
@@ -450,7 +447,7 @@ pub(crate) fn console_ui(
 
                         set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
                     } else if text_edit_response.has_focus()
-                        && ui.input().key_pressed(egui::Key::ArrowDown)
+                        && ui.input(|i| i.key_pressed(egui::Key::ArrowDown))
                         && state.history_index > 0
                     {
                         state.history_index -= 1;
@@ -461,7 +458,7 @@ pub(crate) fn console_ui(
                     }
 
                     // Focus on input
-                    ui.memory().request_focus(text_edit_response.id);
+                    ui.memory_mut(|m| m.request_focus(text_edit_response.id));
                 });
             });
     }
