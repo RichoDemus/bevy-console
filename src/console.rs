@@ -399,21 +399,17 @@ pub(crate) fn console_ui(
                                 state.history.pop_back();
                             }
 
-                            let mut raw_input = Shlex::new(&state.buf).collect::<Vec<_>>();
+                            let mut args = Shlex::new(&state.buf).collect::<Vec<_>>();
 
-                            if !raw_input.is_empty() {
-                                let command_name = raw_input.remove(0);
-                                debug!(
-                                    "Command entered: `{command_name}`, with args: `{raw_input:?}`"
-                                );
+                            if !args.is_empty() {
+                                let command_name = args.remove(0);
+                                debug!("Command entered: `{command_name}`, with args: `{args:?}`");
 
                                 let command = config.commands.get(command_name.as_str());
 
                                 if command.is_some() {
-                                    command_entered.send(ConsoleCommandEntered {
-                                        command_name,
-                                        args: raw_input,
-                                    });
+                                    command_entered
+                                        .send(ConsoleCommandEntered { command_name, args });
                                 } else {
                                     debug!(
                                         "Command not recognized, recognized commands: `{:?}`",
