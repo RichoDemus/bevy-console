@@ -11,6 +11,7 @@ use bevy_egui::{
     EguiContexts,
 };
 use clap::{builder::StyledStr, CommandFactory, FromArgMatches};
+use shlex::Shlex;
 use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::mem;
@@ -398,11 +399,7 @@ pub(crate) fn console_ui(
                                 state.history.pop_back();
                             }
 
-                            let mut raw_input = state
-                                .buf
-                                .split_ascii_whitespace()
-                                .map(ToOwned::to_owned)
-                                .collect::<Vec<_>>();
+                            let mut raw_input = Shlex::new(&state.buf).collect::<Vec<_>>();
 
                             if !raw_input.is_empty() {
                                 let command_name = raw_input.remove(0);
