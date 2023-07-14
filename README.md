@@ -17,8 +17,7 @@ use bevy_console::{ConsoleConfiguration, ConsolePlugin};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(ConsolePlugin)
+        .add_plugins((DefaultPlugins, ConsolePlugin))
         .insert_resource(ConsoleConfiguration {
             // override config here
             ..Default::default()
@@ -38,8 +37,7 @@ use clap::Parser;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(ConsolePlugin)
+        .add_plugins((DefaultPlugins, ConsolePlugin))
         .add_console_command::<ExampleCommand, _>(example_command);
 }
 

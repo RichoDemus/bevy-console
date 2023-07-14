@@ -3,8 +3,7 @@ use bevy_console::{ConsoleConfiguration, ConsolePlugin, ToggleConsoleKey};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(ConsolePlugin)
+        .add_plugins((DefaultPlugins, ConsolePlugin))
         .insert_resource(ConsoleConfiguration {
             keys: vec![
                 ToggleConsoleKey::ScanCode(41), // Console key on a swedish keyboard
