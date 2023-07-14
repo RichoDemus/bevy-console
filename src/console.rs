@@ -1,6 +1,8 @@
 use bevy::ecs::{
-    schedule::IntoSystemConfig,
+    component::Tick,
+    schedule::IntoSystemConfigs,
     system::{Resource, SystemMeta, SystemParam},
+    world::unsafe_world_cell::UnsafeWorldCell,
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_egui::egui::{self, Align, ScrollArea, TextEdit};
@@ -11,6 +13,7 @@ use bevy_egui::{
     EguiContexts,
 };
 use clap::{builder::StyledStr, CommandFactory, FromArgMatches};
+use shlex::Shlex;
 use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::mem;
@@ -131,8 +134,8 @@ unsafe impl<T: Command> SystemParam for ConsoleCommand<'_, T> {
     unsafe fn get_param<'w, 's>(
         state: &'s mut Self::State,
         system_meta: &SystemMeta,
-        world: &'w World,
-        change_tick: u32,
+        world: UnsafeWorldCell<'w>,
+        change_tick: Tick,
     ) -> Self::Item<'w, 's> {
         let mut event_reader = ConsoleCommandEnteredReaderSystemParam::get_param(
             &mut state.event_reader,
@@ -178,7 +181,7 @@ unsafe impl<T: Command> SystemParam for ConsoleCommand<'_, T> {
     }
 }
 /// Parsed raw console command into `command` and `args`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Event)]
 pub struct ConsoleCommandEntered {
     /// the command definition
     pub command_name: String,
@@ -187,7 +190,7 @@ pub struct ConsoleCommandEntered {
 }
 
 /// Events to print to the console.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Event, PartialEq)]
 pub struct PrintConsoleLine {
     /// Console line
     pub line: StyledStr,
@@ -269,14 +272,14 @@ pub trait AddConsoleCommand {
     /// ```
     fn add_console_command<T: Command, Params>(
         &mut self,
-        system: impl IntoSystemConfig<Params>,
+        system: impl IntoSystemConfigs<Params>,
     ) -> &mut Self;
 }
 
 impl AddConsoleCommand for App {
     fn add_console_command<T: Command, Params>(
         &mut self,
-        system: impl IntoSystemConfig<Params>,
+        system: impl IntoSystemConfigs<Params>,
     ) -> &mut Self {
         let sys = move |mut config: ResMut<ConsoleConfiguration>| {
             let command = T::command().no_binary_name(true);
@@ -291,8 +294,8 @@ impl AddConsoleCommand for App {
             config.commands.insert(name, command);
         };
 
-        self.add_startup_system(sys)
-            .add_system(system.in_set(ConsoleSet::Commands))
+        self.add_systems(Startup, sys)
+            .add_systems(Update, system.in_set(ConsoleSet::Commands))
     }
 }
 
@@ -331,12 +334,17 @@ pub(crate) fn console_ui(
     mut command_entered: EventWriter<ConsoleCommandEntered>,
     mut console_open: ResMut<ConsoleOpen>,
 ) {
+  
     let keyboard_input_events = keyboard_input_events.iter().collect::<Vec<_>>();
+    let ctx = egui_context.ctx_mut();
 
     let pressed = keyboard_input_events
         .iter()
         .any(|code| console_key_pressed(code, &config.keys));
-    if pressed {
+  
+    // always close if console open
+    // avoid opening console if typing in another text input
+    if pressed && (console_open.open || !ctx.wants_keyboard_input()) {
         console_open.open = !console_open.open;
     }
 
@@ -346,7 +354,7 @@ pub(crate) fn console_ui(
             .default_pos([config.left_pos, config.top_pos])
             .default_size([config.width, config.height])
             .resizable(true)
-            .show(egui_context.ctx_mut(), |ui| {
+            .show(ctx, |ui| {
                 ui.vertical(|ui| {
                     let scroll_height = ui.available_height() - 30.0;
 
@@ -401,25 +409,17 @@ pub(crate) fn console_ui(
                                 state.history.pop_back();
                             }
 
-                            let mut raw_input = state
-                                .buf
-                                .split_ascii_whitespace()
-                                .map(ToOwned::to_owned)
-                                .collect::<Vec<_>>();
+                            let mut args = Shlex::new(&state.buf).collect::<Vec<_>>();
 
-                            if !raw_input.is_empty() {
-                                let command_name = raw_input.remove(0);
-                                debug!(
-                                    "Command entered: `{command_name}`, with args: `{raw_input:?}`"
-                                );
+                            if !args.is_empty() {
+                                let command_name = args.remove(0);
+                                debug!("Command entered: `{command_name}`, with args: `{args:?}`");
 
                                 let command = config.commands.get(command_name.as_str());
 
                                 if command.is_some() {
-                                    command_entered.send(ConsoleCommandEntered {
-                                        command_name,
-                                        args: raw_input,
-                                    });
+                                    command_entered
+                                        .send(ConsoleCommandEntered { command_name, args });
                                 } else {
                                     debug!(
                                         "Command not recognized, recognized commands: `{:?}`",
@@ -534,6 +534,7 @@ mod tests {
             scan_code: 41,
             key_code: None,
             state: ButtonState::Pressed,
+            window: Entity::PLACEHOLDER,
         };
 
         let config = vec![ToggleConsoleKey::ScanCode(41)];
@@ -548,6 +549,7 @@ mod tests {
             scan_code: 42,
             key_code: None,
             state: ButtonState::Pressed,
+            window: Entity::PLACEHOLDER,
         };
 
         let config = vec![ToggleConsoleKey::ScanCode(41)];
@@ -562,6 +564,7 @@ mod tests {
             scan_code: 0,
             key_code: Some(KeyCode::Grave),
             state: ButtonState::Pressed,
+            window: Entity::PLACEHOLDER,
         };
 
         let config = vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)];
@@ -576,6 +579,7 @@ mod tests {
             scan_code: 0,
             key_code: Some(KeyCode::A),
             state: ButtonState::Pressed,
+            window: Entity::PLACEHOLDER,
         };
 
         let config = vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)];
@@ -590,6 +594,7 @@ mod tests {
             scan_code: 0,
             key_code: Some(KeyCode::Grave),
             state: ButtonState::Released,
+            window: Entity::PLACEHOLDER,
         };
 
         let config = vec![ToggleConsoleKey::KeyCode(KeyCode::Grave)];

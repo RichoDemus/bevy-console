@@ -55,19 +55,27 @@ impl Plugin for ConsolePlugin {
             .add_console_command::<ClearCommand, _>(clear_command)
             .add_console_command::<ExitCommand, _>(exit_command)
             .add_console_command::<HelpCommand, _>(help_command)
-            .add_system(console_ui.in_set(ConsoleSet::ConsoleUI))
-            .add_system(receive_console_line.in_set(ConsoleSet::PostCommands))
-            .configure_set(
-                ConsoleSet::Commands
-                    .after(ConsoleSet::ConsoleUI)
-                    .run_if(have_commands),
+            .add_systems(
+                Update,
+                (
+                    console_ui.in_set(ConsoleSet::ConsoleUI),
+                    receive_console_line.in_set(ConsoleSet::PostCommands),
+                ),
             )
-            .configure_set(ConsoleSet::PostCommands.after(ConsoleSet::Commands));
+            .configure_sets(
+                Update,
+                (
+                    ConsoleSet::Commands
+                        .after(ConsoleSet::ConsoleUI)
+                        .run_if(have_commands),
+                    ConsoleSet::PostCommands.after(ConsoleSet::Commands),
+                ),
+            );
 
         // Don't initialize an egui plugin if one already exists.
         // This can happen if another plugin is using egui and was installed before us.
         if !app.world.contains_resource::<EguiSettings>() {
-            app.add_plugin(EguiPlugin);
+            app.add_plugins(EguiPlugin);
         }
     }
 }
