@@ -334,14 +334,13 @@ pub(crate) fn console_ui(
     mut command_entered: EventWriter<ConsoleCommandEntered>,
     mut console_open: ResMut<ConsoleOpen>,
 ) {
-  
     let keyboard_input_events = keyboard_input_events.iter().collect::<Vec<_>>();
     let ctx = egui_context.ctx_mut();
 
     let pressed = keyboard_input_events
         .iter()
         .any(|code| console_key_pressed(code, &config.keys));
-  
+
     // always close if console open
     // avoid opening console if typing in another text input
     if pressed && (console_open.open || !ctx.wants_keyboard_input()) {
@@ -438,7 +437,7 @@ pub(crate) fn console_ui(
                     if keyboard_input_events
                         .iter()
                         .any(|&k| k.state.is_pressed() && k.key_code == Some(KeyCode::L))
-                        && (keys.any_pressed([KeyCode::LControl, KeyCode::RControl]))
+                        && (keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]))
                     {
                         state.scrollback.clear();
                     }
