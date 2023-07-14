@@ -333,10 +333,13 @@ pub(crate) fn console_ui(
     mut command_entered: EventWriter<ConsoleCommandEntered>,
     mut console_open: ResMut<ConsoleOpen>,
 ) {
+    let ctx = egui_context.ctx_mut();
+
     let pressed = keyboard_input_events
         .iter()
         .any(|code| console_key_pressed(code, &config.keys));
-    if pressed {
+
+    if pressed && (console_open.open || !ctx.wants_keyboard_input()) {
         console_open.open = !console_open.open;
     }
 
@@ -346,7 +349,7 @@ pub(crate) fn console_ui(
             .default_pos([config.left_pos, config.top_pos])
             .default_size([config.width, config.height])
             .resizable(true)
-            .show(egui_context.ctx_mut(), |ui| {
+            .show(ctx, |ui| {
                 ui.vertical(|ui| {
                     let scroll_height = ui.available_height() - 30.0;
 
