@@ -69,7 +69,7 @@ impl<'w, T> ConsoleCommand<'w, T> {
     /// Returns Some(T) if the command was executed and arguments were valid.
     ///
     /// This method should only be called once.
-    /// Consecutive calls will return None regardless if the command occured.
+    /// Consecutive calls will return None regardless if the command occurred.
     pub fn take(&mut self) -> Option<Result<T, clap::Error>> {
         mem::take(&mut self.command)
     }
