@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 pub use bevy_console_derive::ConsoleCommand;
-use bevy_egui::{EguiPlugin, EguiSettings};
+use bevy_egui::EguiPlugin;
 
 use crate::commands::clear::{clear_command, ClearCommand};
 use crate::commands::exit::{exit_command, ExitCommand};
@@ -74,7 +74,7 @@ impl Plugin for ConsolePlugin {
 
         // Don't initialize an egui plugin if one already exists.
         // This can happen if another plugin is using egui and was installed before us.
-        if !app.world.contains_resource::<EguiSettings>() {
+        if !app.is_plugin_added::<EguiPlugin>() {
             app.add_plugins(EguiPlugin);
         }
     }
