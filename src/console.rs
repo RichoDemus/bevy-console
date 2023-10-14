@@ -126,7 +126,7 @@ unsafe impl<T: Command> SystemParam for ConsoleCommand<'_, T> {
         ConsoleCommandState {
             event_reader,
             console_line,
-            marker: PhantomData::default(),
+            marker: PhantomData,
         }
     }
 
