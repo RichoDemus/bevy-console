@@ -150,7 +150,7 @@ unsafe impl<T: Command> SystemParam for ConsoleCommand<'_, T> {
             change_tick,
         );
 
-        let command = event_reader.iter().find_map(|command| {
+        let command = event_reader.read().find_map(|command| {
             if T::name() == command.command_name {
                 let clap_command = T::command().no_binary_name(true);
                 // .color(clap::ColorChoice::Always);
@@ -334,7 +334,7 @@ pub(crate) fn console_ui(
     mut command_entered: EventWriter<ConsoleCommandEntered>,
     mut console_open: ResMut<ConsoleOpen>,
 ) {
-    let keyboard_input_events = keyboard_input_events.iter().collect::<Vec<_>>();
+    let keyboard_input_events = keyboard_input_events.read().collect::<Vec<_>>();
     let ctx = egui_context.ctx_mut();
 
     let pressed = keyboard_input_events
@@ -479,7 +479,7 @@ pub(crate) fn receive_console_line(
     mut console_state: ResMut<ConsoleState>,
     mut events: EventReader<PrintConsoleLine>,
 ) {
-    for event in events.iter() {
+    for event in events.read() {
         let event: &PrintConsoleLine = event;
         console_state.scrollback.push(event.line.clone());
     }
