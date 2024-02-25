@@ -10,7 +10,7 @@ use crate::commands::exit::{exit_command, ExitCommand};
 use crate::commands::help::{help_command, HelpCommand};
 pub use crate::console::{
     AddConsoleCommand, Command, ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration,
-    ConsoleOpen, NamedCommand, PrintConsoleLine, ToggleConsoleKey,
+    ConsoleOpen, NamedCommand, PrintConsoleLine,
 };
 // pub use color::{Style, StyledStr};
 
