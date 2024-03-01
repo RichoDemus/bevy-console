@@ -491,7 +491,9 @@ fn console_key_pressed(keyboard_input: &KeyboardInput, configured_keys: &[KeyCod
 
 fn set_cursor_pos(ctx: &Context, id: Id, pos: usize) {
     if let Some(mut state) = TextEdit::load_state(ctx, id) {
-        state.set_ccursor_range(Some(CCursorRange::one(CCursor::new(pos))));
+        state
+            .cursor
+            .set_char_range(Some(CCursorRange::one(CCursor::new(pos))));
         state.store(ctx, id);
     }
 }

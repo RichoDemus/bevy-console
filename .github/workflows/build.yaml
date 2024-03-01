@@ -2,7 +2,10 @@ name: Check
 env:
   CARGO_TERM_COLOR: always
 on:
-  push
+  pull_request:
+  push:
+    branches:
+      - main
 jobs:
   check:
     runs-on: ubuntu-latest
