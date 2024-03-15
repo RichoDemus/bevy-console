@@ -219,8 +219,22 @@ pub struct ConsoleConfiguration {
     pub commands: BTreeMap<&'static str, clap::Command>,
     /// Number of commands to store in history
     pub history_size: usize,
-    ///Line prefix symbol
+    /// Line prefix symbol
     pub symbol: String,
+    /// allows window to be collpased
+    pub collapsible: bool,
+    /// Title name of console window
+    pub title_name: String,
+    /// allows window to be resizable
+    pub resizable: bool,
+    /// allows window to be movable
+    pub moveable: bool,
+    /// show the title bar or not
+    pub show_title_bar: bool,
+    /// Background color of console window  
+    pub background_color: Color32,
+    /// Foreground (text) color
+    pub foreground_color: Color32,
 }
 
 impl Default for ConsoleConfiguration {
@@ -234,6 +248,13 @@ impl Default for ConsoleConfiguration {
             commands: BTreeMap::new(),
             history_size: 20,
             symbol: "$ ".to_owned(),
+            collapsible: false,
+            title_name: "Console".to_string(),
+            resizable: true,
+            moveable: true,
+            show_title_bar: true,
+            background_color: Color32::from_black_alpha(102),
+            foreground_color: Color32::LIGHT_GRAY,
         }
     }
 }
@@ -338,12 +359,21 @@ pub(crate) fn console_ui(
     }
 
     if console_open.open {
-        egui::Window::new("Console")
-            .collapsible(false)
+        egui::Window::new(&config.title_name)
+            .collapsible(config.collapsible)
             .default_pos([config.left_pos, config.top_pos])
             .default_size([config.width, config.height])
-            .resizable(true)
+            .resizable(config.resizable)
+            .movable(config.moveable)
+            .title_bar(config.show_title_bar)
+            .frame(egui::Frame {
+                fill: config.background_color,
+                ..Default::default()
+            })
             .show(ctx, |ui| {
+                ui.style_mut().visuals.extreme_bg_color = config.background_color;
+                ui.style_mut().visuals.override_text_color = Some(config.foreground_color);
+
                 ui.vertical(|ui| {
                     let scroll_height = ui.available_height() - 30.0;
 
@@ -360,7 +390,10 @@ pub(crate) fn console_ui(
                                     text.append(
                                         &line.to_string(), //TOOD: once clap supports custom styling use it here
                                         0f32,
-                                        TextFormat::simple(FontId::monospace(14f32), Color32::GRAY),
+                                        TextFormat::simple(
+                                            FontId::monospace(14f32),
+                                            config.foreground_color,
+                                        ),
                                     );
 
                                     ui.label(text);
