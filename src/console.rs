@@ -223,7 +223,7 @@ pub struct ConsoleConfiguration {
     pub symbol: String,
     /// Custom argument completions for commands.
     /// Key is the command, entries are potential completions.
-    pub custom_arg_completions: HashMap<String, Vec<String>>,
+    pub arg_completions: HashMap<String, Vec<String>>,
 }
 
 impl Default for ConsoleConfiguration {
@@ -237,7 +237,7 @@ impl Default for ConsoleConfiguration {
             commands: BTreeMap::new(),
             history_size: 20,
             symbol: "$ ".to_owned(),
-            custom_arg_completions: HashMap::new(),
+            arg_completions: HashMap::new(),
         }
     }
 }
@@ -463,7 +463,7 @@ pub(crate) fn console_ui(
                                 + &full_word;
                             state.buf = full_line;
                         } else if line_words.len() > 1 { // create cycle to autocomplete arguments
-                            if let Some(args_completions) = config.custom_arg_completions.get(line_words[0]) {
+                            if let Some(args_completions) = config.arg_completions.get(line_words[0]) {
                                 let completions: Vec<String> = args_completions.iter()
                                     .filter(|x| x.starts_with(&partial_word))
                                     .map(|x| x.to_string())
