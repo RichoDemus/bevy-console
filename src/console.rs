@@ -302,6 +302,7 @@ pub(crate) struct ConsoleState {
     pub(crate) scrollback: Vec<StyledStr>,
     pub(crate) history: VecDeque<StyledStr>,
     pub(crate) history_index: usize,
+    pub(crate) completions: Vec<String>,
 }
 
 impl Default for ConsoleState {
@@ -311,6 +312,7 @@ impl Default for ConsoleState {
             scrollback: Vec::new(),
             history: VecDeque::from([StyledStr::new()]),
             history_index: 0,
+            completions: Vec::new(),
         }
     }
 }
@@ -420,6 +422,27 @@ pub(crate) fn console_ui(
                             }
 
                             state.buf.clear();
+                        }
+                    }
+
+                    // Autocomplete line on tab
+                    if ui.input(|i| i.key_pressed(egui::Key::Tab))
+                    {
+                        if state.completions.contains(&state.buf) {
+                            let i = state.completions.iter().position(|x| x == &state.buf).unwrap();
+                            match state.completions.get(i + 1) {
+                                Some(x) => { state.buf = x.to_string(); }
+                                None => { state.buf = state.completions[0].to_string(); }
+                            }
+                        } else {
+                            let completions: Vec<String> = config.commands.keys()
+                                .filter(|x| x.starts_with(&state.buf))
+                                .map(|x| x.to_string())
+                                .collect();
+                            if !completions.is_empty() {
+                                state.completions = completions.clone();
+                                state.buf = completions[0].to_string();
+                            }
                         }
                     }
 
