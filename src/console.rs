@@ -477,19 +477,13 @@ pub(crate) fn console_ui(
                     }
 
                     // Clear line on ctrl+c
-                    if keyboard_input_events
-                        .iter()
-                        .any(|&k| k.state.is_pressed() && k.key_code == KeyCode::KeyC)
-                        && (keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]))
+                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::C))
                     {
                         state.buf.clear();
                     }
 
                     // Clear history on ctrl+l
-                    if keyboard_input_events
-                        .iter()
-                        .any(|&k| k.state.is_pressed() && k.key_code == KeyCode::KeyL)
-                        && (keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]))
+                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::L))
                     {
                         state.scrollback.clear();
                         state.buf = state.buf[0..(state.buf.len() - 1)].to_string();
