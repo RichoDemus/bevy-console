@@ -70,3 +70,11 @@ cargo run --example log_command
 ## wasm
 
 Should work in wasm, but you need to disable default features.
+
+## Keyboard Shortcuts
+
+Some shortcuts:
+
+- Ctrl + L: Clear history
+- Ctrl + C: Clear line
+- Tab: Line completion
