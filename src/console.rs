@@ -423,7 +423,16 @@ pub(crate) fn console_ui(
                         }
                     }
 
-                    // Clear on ctrl+l
+                    // Clear line on ctrl+c
+                    if keyboard_input_events
+                        .iter()
+                        .any(|&k| k.state.is_pressed() && k.key_code == KeyCode::KeyC)
+                        && (keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]))
+                    {
+                        state.buf.clear();
+                    }
+
+                    // Clear history on ctrl+l
                     if keyboard_input_events
                         .iter()
                         .any(|&k| k.state.is_pressed() && k.key_code == KeyCode::KeyL)
