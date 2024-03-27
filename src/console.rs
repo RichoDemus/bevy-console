@@ -382,6 +382,20 @@ pub(crate) fn console_ui(
                     // Separator
                     ui.separator();
 
+                    // Clear line on ctrl+c
+                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::C))
+                    {
+                        state.buf.clear();
+                        return;
+                    }
+                    
+                    // Clear history on ctrl+l
+                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::L))
+                    {
+                        state.scrollback.clear();
+                        return;
+                    }
+
                     // Input
                     let text_edit = TextEdit::singleline(&mut state.buf)
                         .desired_width(f32::INFINITY)
@@ -474,19 +488,6 @@ pub(crate) fn console_ui(
                                 state.buf = completions[0].to_string();
                             }
                         }
-                    }
-
-                    // Clear line on ctrl+c
-                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::C))
-                    {
-                        state.buf.clear();
-                    }
-
-                    // Clear history on ctrl+l
-                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::L))
-                    {
-                        state.scrollback.clear();
-                        state.buf = state.buf[0..(state.buf.len() - 1)].to_string();
                     }
 
                     // Handle up and down through history
