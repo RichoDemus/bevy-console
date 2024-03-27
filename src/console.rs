@@ -492,6 +492,7 @@ pub(crate) fn console_ui(
                         && (keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]))
                     {
                         state.scrollback.clear();
+                        state.buf = state.buf[0..(state.buf.len() - 1)].to_string();
                     }
 
                     // Handle up and down through history
