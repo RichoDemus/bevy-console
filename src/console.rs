@@ -3,7 +3,7 @@ use bevy::ecs::{
     system::{Resource, SystemMeta, SystemParam},
     world::unsafe_world_cell::UnsafeWorldCell,
 };
-use bevy::{input::keyboard::KeyboardInput, prelude::*};
+use bevy::{input::keyboard::KeyboardInput, prelude::*, utils::hashbrown::HashMap};
 use bevy_egui::egui::{self, Align, ScrollArea, TextEdit};
 use bevy_egui::egui::{text::LayoutJob, text_selection::CCursorRange};
 use bevy_egui::egui::{Context, Id};
@@ -219,8 +219,11 @@ pub struct ConsoleConfiguration {
     pub commands: BTreeMap<&'static str, clap::Command>,
     /// Number of commands to store in history
     pub history_size: usize,
-    ///Line prefix symbol
+    /// Line prefix symbol
     pub symbol: String,
+    /// Custom argument completions for commands.
+    /// Key is the command, entries are potential completions.
+    pub arg_completions: HashMap<String, Vec<String>>,
 }
 
 impl Default for ConsoleConfiguration {
@@ -234,6 +237,7 @@ impl Default for ConsoleConfiguration {
             commands: BTreeMap::new(),
             history_size: 20,
             symbol: "$ ".to_owned(),
+            arg_completions: HashMap::new(),
         }
     }
 }
@@ -302,6 +306,7 @@ pub(crate) struct ConsoleState {
     pub(crate) scrollback: Vec<StyledStr>,
     pub(crate) history: VecDeque<StyledStr>,
     pub(crate) history_index: usize,
+    pub(crate) completions: Vec<String>,
 }
 
 impl Default for ConsoleState {
@@ -311,6 +316,7 @@ impl Default for ConsoleState {
             scrollback: Vec::new(),
             history: VecDeque::from([StyledStr::new()]),
             history_index: 0,
+            completions: Vec::new(),
         }
     }
 }
@@ -319,7 +325,6 @@ pub(crate) fn console_ui(
     mut egui_context: EguiContexts,
     config: Res<ConsoleConfiguration>,
     mut keyboard_input_events: EventReader<KeyboardInput>,
-    keys: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<ConsoleState>,
     mut command_entered: EventWriter<ConsoleCommandEntered>,
     mut console_open: ResMut<ConsoleOpen>,
@@ -376,6 +381,20 @@ pub(crate) fn console_ui(
                     // Separator
                     ui.separator();
 
+                    // Clear line on ctrl+c
+                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::C))
+                    {
+                        state.buf.clear();
+                        return;
+                    }
+                    
+                    // Clear history on ctrl+l
+                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::L))
+                    {
+                        state.scrollback.clear();
+                        return;
+                    }
+
                     // Input
                     let text_edit = TextEdit::singleline(&mut state.buf)
                         .desired_width(f32::INFINITY)
@@ -423,13 +442,51 @@ pub(crate) fn console_ui(
                         }
                     }
 
-                    // Clear on ctrl+l
-                    if keyboard_input_events
-                        .iter()
-                        .any(|&k| k.state.is_pressed() && k.key_code == KeyCode::KeyL)
-                        && (keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]))
+                    // Autocomplete line on tab
+                    if ui.input(|i| i.key_pressed(egui::Key::Tab))
                     {
-                        state.scrollback.clear();
+                        let line_words: Vec<&str> = state.buf.split_whitespace().collect();
+                        let partial_word = line_words.last().unwrap_or(&"").to_string();
+
+                        if state.completions.contains(&partial_word) {
+                            // user was already cycling through possible completions; continue doing so
+                            let i = state.completions.iter().position(|x| x == &partial_word).unwrap();
+                            let full_word = match state.completions.get(i + 1) {
+                                Some(x) => x.to_string(),
+                                None => state.completions[0].to_string(),
+                            };
+                            let full_line = line_words.iter()
+                                .enumerate()
+                                .filter(|(i, _)| i != &(line_words.len() - 1))
+                                .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
+                                + &full_word;
+                            state.buf = full_line;
+                        } else if line_words.len() > 1 { // create cycle to autocomplete arguments
+                            if let Some(args_completions) = config.arg_completions.get(line_words[0]) {
+                                let completions: Vec<String> = args_completions.iter()
+                                    .filter(|x| x.starts_with(&partial_word))
+                                    .map(|x| x.to_string())
+                                    .collect();
+                                if !completions.is_empty() {
+                                    let full_line = line_words.iter()
+                                        .enumerate()
+                                        .filter(|(i, _)| i != &(line_words.len() - 1))
+                                        .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
+                                        + &completions[0];
+                                    state.buf = full_line;
+                                    state.completions = completions.clone();
+                                }
+                            }
+                        } else { // create cycle to autocomplete commands
+                            let completions: Vec<String> = config.commands.keys()
+                                .filter(|x| x.starts_with(&state.buf))
+                                .map(|x| x.to_string())
+                                .collect();
+                            if !completions.is_empty() {
+                                state.completions = completions.clone();
+                                state.buf = completions[0].to_string();
+                            }
+                        }
                     }
 
                     // Handle up and down through history
