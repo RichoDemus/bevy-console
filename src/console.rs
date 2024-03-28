@@ -13,6 +13,7 @@ use bevy_egui::{
 };
 use clap::{builder::StyledStr, CommandFactory, FromArgMatches};
 use shlex::Shlex;
+use trie_rs::{Trie, TrieBuilder};
 use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::mem;
@@ -288,7 +289,7 @@ impl AddConsoleCommand for App {
             config.commands.insert(name, command);
         };
 
-        self.add_systems(Startup, sys)
+        self.add_systems(Startup, sys.before(build_command_completion_trie))
             .add_systems(Update, system.in_set(ConsoleSet::Commands))
     }
 }
@@ -307,6 +308,7 @@ pub(crate) struct ConsoleState {
     pub(crate) history: VecDeque<StyledStr>,
     pub(crate) history_index: usize,
     pub(crate) completions: Vec<String>,
+    commands_trie: Trie<u8>,
 }
 
 impl Default for ConsoleState {
@@ -317,8 +319,18 @@ impl Default for ConsoleState {
             history: VecDeque::from([StyledStr::new()]),
             history_index: 0,
             completions: Vec::new(),
+            commands_trie: TrieBuilder::new().build(),
         }
     }
+}
+
+pub(crate) fn build_command_completion_trie(
+    config: Res<ConsoleConfiguration>,
+    mut state: ResMut<ConsoleState>,
+) {
+    let mut trie_builder = TrieBuilder::new();
+    config.commands.keys().for_each(|x| trie_builder.push(x));
+    state.commands_trie = trie_builder.build();
 }
 
 pub(crate) fn console_ui(
@@ -446,11 +458,10 @@ pub(crate) fn console_ui(
                     if ui.input(|i| i.key_pressed(egui::Key::Tab))
                     {
                         let line_words: Vec<&str> = state.buf.split_whitespace().collect();
-                        let partial_word = line_words.last().unwrap_or(&"").to_string();
+                        let target_word = line_words.last().unwrap_or(&"").to_string();
 
-                        if state.completions.contains(&partial_word) {
-                            // user was already cycling through possible completions; continue doing so
-                            let i = state.completions.iter().position(|x| x == &partial_word).unwrap();
+                        if state.completions.contains(&target_word) { // continue cycling through potential completions
+                            let i = state.completions.iter().position(|x| x == &target_word).unwrap();
                             let full_word = match state.completions.get(i + 1) {
                                 Some(x) => x.to_string(),
                                 None => state.completions[0].to_string(),
@@ -461,32 +472,44 @@ pub(crate) fn console_ui(
                                 .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
                                 + &full_word;
                             state.buf = full_line;
-                        } else if line_words.len() > 1 { // create cycle to autocomplete arguments
-                            if let Some(args_completions) = config.arg_completions.get(line_words[0]) {
-                                let completions: Vec<String> = args_completions.iter()
-                                    .filter(|x| x.starts_with(&partial_word))
-                                    .map(|x| x.to_string())
+                        } else if line_words.len() > 1 { // create completion list for arguments
+                            let Some(arg_completions) = config.arg_completions.get(line_words[0]) else { return; };
+                            let mut trie_builder = TrieBuilder::new();
+                            arg_completions.iter().for_each(|x| trie_builder.push(x));
+                            let search = trie_builder.build().predictive_search(&target_word);
+                            let completions: Vec<&str> = search.iter()
+                                .map(|x| std::str::from_utf8(x).unwrap())
+                                .collect();
+
+                            if !completions.is_empty() {
+                                let full_line = line_words.iter()
+                                    .enumerate()
+                                    .filter(|(i, _)| i != &(line_words.len() - 1))
+                                    .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
+                                    + &completions[0];
+                                state.completions = completions.iter().map(|x| x.to_string()).collect();
+                                state.buf = full_line;
+                            }
+                        } else { // create completion list for commands
+                            if target_word == "" {
+                                // separate logic, as trie_rs::Trie::predictive_search runtime panics on empty strings
+                                state.completions = config.commands.keys().map(|x| x.to_string()).collect();
+                                state.buf = state.completions[0].to_string();
+                            } else {
+                                let search = state.commands_trie.predictive_search(&target_word);
+                                let completions: Vec<&str> = search.iter()
+                                    .map(|x| std::str::from_utf8(x).unwrap())
                                     .collect();
                                 if !completions.is_empty() {
-                                    let full_line = line_words.iter()
-                                        .enumerate()
-                                        .filter(|(i, _)| i != &(line_words.len() - 1))
-                                        .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
-                                        + &completions[0];
-                                    state.buf = full_line;
-                                    state.completions = completions.clone();
+                                    state.completions = completions.iter().map(|x| x.to_string()).collect();
+                                    state.buf = completions[0].to_string();
                                 }
                             }
-                        } else { // create cycle to autocomplete commands
-                            let completions: Vec<String> = config.commands.keys()
-                                .filter(|x| x.starts_with(&state.buf))
-                                .map(|x| x.to_string())
-                                .collect();
-                            if !completions.is_empty() {
-                                state.completions = completions.clone();
-                                state.buf = completions[0].to_string();
-                            }
-                        }
+                        } 
+                    } else if ui.input(|i| !i.key_down(egui::Key::Tab) & !i.keys_down.is_empty()) {
+                        // User pressed a key that isn't Tab.
+                        // We reset the completion list, so that if they press tab later, we always regenerate a new completions list.
+                        state.completions = Vec::new();
                     }
 
                     // Handle up and down through history

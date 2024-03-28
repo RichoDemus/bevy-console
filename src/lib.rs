@@ -14,7 +14,7 @@ pub use crate::console::{
 };
 // pub use color::{Style, StyledStr};
 
-use crate::console::{console_ui, receive_console_line, ConsoleState};
+use crate::console::{console_ui, receive_console_line, build_command_completion_trie, ConsoleState};
 
 pub use clap;
 
@@ -57,6 +57,7 @@ impl Plugin for ConsolePlugin {
             .add_console_command::<ClearCommand, _>(clear_command)
             .add_console_command::<ExitCommand, _>(exit_command)
             .add_console_command::<HelpCommand, _>(help_command)
+            .add_systems(Startup, build_command_completion_trie)
             .add_systems(
                 Update,
                 (
