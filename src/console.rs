@@ -476,6 +476,7 @@ pub(crate) fn console_ui(
                     {
                         let line_words: Vec<&str> = state.buf.split_whitespace().collect();
                         let target_word = line_words.last().unwrap_or(&"").to_string();
+                        let target_is_arg: bool = state.buf.contains(' ');
 
                         if state.completions.contains(&target_word) { // continue cycling through potential completions
                             let i = state.completions.iter().position(|x| x == &target_word).unwrap();
@@ -489,24 +490,37 @@ pub(crate) fn console_ui(
                                 .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
                                 + &full_word;
                             state.buf = full_line;
-                        } else if line_words.len() > 1 { // create completion list for arguments
-                            let Some(arg_completions) = config.arg_completions.get(line_words[0]) else { return; };
-                            let mut trie_builder = TrieBuilder::new();
-                            arg_completions.iter().for_each(|x| trie_builder.push(x));
-                            let search = trie_builder.build().predictive_search(&target_word);
-                            let completions: Vec<&str> = search.iter()
-                                .map(|x| std::str::from_utf8(x).unwrap())
-                                .collect();
+                        } else if target_is_arg { // create completion list for arguments
+                            let Some(cmd) = line_words.get(0) else { return; };
+                            let Some(arg_completions) = config.arg_completions.get(*cmd) else { return; };
 
-                            if !completions.is_empty() {
-                                let full_line = line_words.iter()
-                                    .enumerate()
-                                    .filter(|(i, _)| i != &(line_words.len() - 1))
-                                    .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
-                                    + &completions[0];
-                                state.completions = completions.iter().map(|x| x.to_string()).collect();
-                                state.buf = full_line;
-                            }
+                            if state.buf.ends_with(' ') {
+                                if !arg_completions.is_empty() {
+                                    let full_line = line_words.iter()
+                                        .enumerate()
+                                        .filter(|(i, _)| i != &(line_words.len()))
+                                        .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
+                                        + &arg_completions[0];
+                                    state.completions = arg_completions.clone();
+                                    state.buf = full_line;
+                                }
+                            } else {
+                                let mut trie_builder = TrieBuilder::new();
+                                arg_completions.iter().for_each(|x| trie_builder.push(x));
+                                let search = trie_builder.build().predictive_search(&target_word);
+                                let completions: Vec<&str> = search.iter()
+                                    .map(|x| std::str::from_utf8(x).unwrap())
+                                    .collect();
+                                if !completions.is_empty() {
+                                    let full_line = line_words.iter()
+                                        .enumerate()
+                                        .filter(|(i, _)| i != &(line_words.len() - 1))
+                                        .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
+                                        + &completions[0];
+                                    state.completions = completions.iter().map(|x| x.to_string()).collect();
+                                    state.buf = full_line;
+                                }
+                            };
                         } else { // create completion list for commands
                             if target_word == "" {
                                 // separate logic, as trie_rs::Trie::predictive_search runtime panics on empty strings
