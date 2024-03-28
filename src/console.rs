@@ -445,6 +445,7 @@ pub(crate) fn console_ui(
                             if state.history.len() > config.history_size + 1 {
                                 state.history.pop_back();
                             }
+                            state.history_index = 0;
 
                             let mut args = Shlex::new(&state.buf).collect::<Vec<_>>();
 
