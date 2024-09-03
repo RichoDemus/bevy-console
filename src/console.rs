@@ -346,7 +346,13 @@ pub(crate) fn console_ui(
     mut console_open: ResMut<ConsoleOpen>,
 ) {
     let keyboard_input_events = keyboard_input_events.read().collect::<Vec<_>>();
-    let ctx = egui_context.ctx_mut();
+
+    // If there is no egui context, return, this can happen when exiting the app
+    let ctx = if let Some(ctxt) = egui_context.try_ctx_mut() {
+        ctxt
+    } else {
+        return;
+    };
 
     let pressed = keyboard_input_events
         .iter()

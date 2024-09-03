@@ -4,6 +4,7 @@ use clap::Parser;
 
 fn main() {
     App::new()
+        // set background to red
         .add_plugins((DefaultPlugins, ConsolePlugin))
         .add_console_command::<LogCommand, _>(log_command)
         .run();
