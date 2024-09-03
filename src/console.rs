@@ -257,7 +257,7 @@ impl Default for ConsoleConfiguration {
             show_title_bar: true,
             background_color: Color32::from_black_alpha(102),
             foreground_color: Color32::LIGHT_GRAY,
-            num_suggestions: 4
+            num_suggestions: 4,
         }
     }
 }
@@ -429,33 +429,41 @@ pub(crate) fn console_ui(
                     // show a few suggestions
                     if text_edit_response.has_focus() && !state.buf.is_empty() {
                         // create the area to show suggestions
-                        let suggestions_area = 
-                            egui::Area::new(ui.auto_id_with("suggestions"))
-                                .fixed_pos(ui.next_widget_position())
-                                .movable(false);
+                        let suggestions_area = egui::Area::new(ui.auto_id_with("suggestions"))
+                            .fixed_pos(ui.next_widget_position())
+                            .movable(false);
                         suggestions_area.show(ui.ctx(), |ui| {
-                            
                             // collect the given number of commands starting
                             // with the given text
-                            let command_names = &config.commands.iter()
-                                .map(|c| *c.0 )
+                            let command_names = &config
+                                .commands
+                                .iter()
+                                .map(|c| *c.0)
                                 .filter(|c| c.starts_with(&state.buf))
                                 .collect::<Vec<_>>();
 
                             // show each command in the list
                             for command in command_names.iter().take(config.num_suggestions) {
                                 let mut layout_job = egui::text::LayoutJob::default();
-                                layout_job.append(state.buf.as_str(), 0.0, TextFormat {
-                                    font_id: FontId::new(14.0, egui::FontFamily::Monospace),
-                                    underline: egui::Stroke::new(1., Color32::WHITE),
-                                    color: Color32::WHITE,
-                                    ..default()
-                                });
-                                layout_job.append(&command[state.buf.len()..], 0.0, TextFormat {
-                                    font_id: FontId::new(14.0, egui::FontFamily::Monospace),
-                                    color: Color32::LIGHT_GRAY,
-                                    ..default()
-                                });
+                                layout_job.append(
+                                    state.buf.as_str(),
+                                    0.0,
+                                    TextFormat {
+                                        font_id: FontId::new(14.0, egui::FontFamily::Monospace),
+                                        underline: egui::Stroke::new(1., Color32::WHITE),
+                                        color: Color32::WHITE,
+                                        ..default()
+                                    },
+                                );
+                                layout_job.append(
+                                    &command[state.buf.len()..],
+                                    0.0,
+                                    TextFormat {
+                                        font_id: FontId::new(14.0, egui::FontFamily::Monospace),
+                                        color: Color32::LIGHT_GRAY,
+                                        ..default()
+                                    },
+                                );
                                 ui.label(layout_job);
                             }
                         });
