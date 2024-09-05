@@ -11,13 +11,19 @@ use bevy_egui::{
     egui::{epaint::text::cursor::CCursor, Color32, FontId, TextFormat},
     EguiContexts,
 };
-use clap::{builder::StyledStr, CommandFactory, FromArgMatches};
+use clap::{CommandFactory, FromArgMatches};
 use shlex::Shlex;
-use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::mem;
+use std::{
+    collections::{BTreeMap, VecDeque},
+    iter::once,
+};
 
-use crate::ConsoleSet;
+use crate::{
+    color::{parse_ansi_styled_str, TextFormattingOverride},
+    ConsoleSet,
+};
 
 type ConsoleCommandEnteredReaderSystemParam = EventReader<'static, 'static, ConsoleCommandEntered>;
 
@@ -87,14 +93,14 @@ impl<'w, T> ConsoleCommand<'w, T> {
     /// Print a reply in the console.
     ///
     /// See [`reply!`](crate::reply) for usage with the [`format!`] syntax.
-    pub fn reply(&mut self, msg: impl Into<StyledStr>) {
+    pub fn reply(&mut self, msg: impl Into<String>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
     }
 
     /// Print a reply in the console followed by `[ok]`.
     ///
     /// See [`reply_ok!`](crate::reply_ok) for usage with the [`format!`] syntax.
-    pub fn reply_ok(&mut self, msg: impl Into<StyledStr>) {
+    pub fn reply_ok(&mut self, msg: impl Into<String>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
         self.ok();
     }
@@ -102,7 +108,7 @@ impl<'w, T> ConsoleCommand<'w, T> {
     /// Print a reply in the console followed by `[failed]`.
     ///
     /// See [`reply_failed!`](crate::reply_failed) for usage with the [`format!`] syntax.
-    pub fn reply_failed(&mut self, msg: impl Into<StyledStr>) {
+    pub fn reply_failed(&mut self, msg: impl Into<String>) {
         self.console_line.send(PrintConsoleLine::new(msg.into()));
         self.failed();
     }
@@ -165,7 +171,7 @@ unsafe impl<T: Command> SystemParam for ConsoleCommand<'_, T> {
                         return Some(T::from_arg_matches(&matches));
                     }
                     Err(err) => {
-                        console_line.send(PrintConsoleLine::new(err.render()));
+                        console_line.send(PrintConsoleLine::new(err.to_string()));
                         return Some(Err(err));
                     }
                 }
@@ -192,12 +198,12 @@ pub struct ConsoleCommandEntered {
 #[derive(Clone, Debug, Eq, Event, PartialEq)]
 pub struct PrintConsoleLine {
     /// Console line
-    pub line: StyledStr,
+    pub line: String,
 }
 
 impl PrintConsoleLine {
     /// Creates a new console line to print.
-    pub const fn new(line: StyledStr) -> Self {
+    pub const fn new(line: String) -> Self {
         Self { line }
     }
 }
@@ -323,8 +329,8 @@ pub struct ConsoleOpen {
 #[derive(Resource)]
 pub(crate) struct ConsoleState {
     pub(crate) buf: String,
-    pub(crate) scrollback: Vec<StyledStr>,
-    pub(crate) history: VecDeque<StyledStr>,
+    pub(crate) scrollback: Vec<String>,
+    pub(crate) history: VecDeque<String>,
     pub(crate) history_index: usize,
 }
 
@@ -333,10 +339,56 @@ impl Default for ConsoleState {
         ConsoleState {
             buf: String::default(),
             scrollback: Vec::new(),
-            history: VecDeque::from([StyledStr::new()]),
+            history: VecDeque::from([String::new()]),
             history_index: 0,
         }
     }
+}
+
+fn default_style(config: &ConsoleConfiguration) -> TextFormat {
+    TextFormat::simple(FontId::monospace(14f32), config.foreground_color)
+}
+
+fn style_ansi_text(str: &str, config: &ConsoleConfiguration) -> LayoutJob {
+    let mut layout_job = LayoutJob::default();
+    let mut current_style = default_style(config);
+    let mut last_offset = 0;
+    let str_without_ansi = strip_ansi_escapes::strip_str(str);
+    for (offset, overrides) in parse_ansi_styled_str(str)
+        .into_iter()
+        .chain(once((str_without_ansi.len(), Default::default())))
+    {
+        // 1<red>2345</red>
+        // 01234
+        let text = &str_without_ansi[(last_offset)..offset];
+        if !text.is_empty() {
+            layout_job.append(text, 0f32, current_style.clone());
+        }
+
+        if overrides.contains(&TextFormattingOverride::Reset) {
+            current_style = default_style(config);
+        }
+
+        for o in overrides {
+            match o {
+                TextFormattingOverride::Bold => current_style.font_id.size = 16f32, // no support for bold font families in egui TODO: when egui supports bold font families, use them here
+                TextFormattingOverride::Dim => current_style.font_id.size = 12f32, // no support for dim font families in egui TODO: when egui supports dim font families, use them here
+                TextFormattingOverride::Italic => current_style.italics = true,
+                TextFormattingOverride::Underline => {
+                    current_style.underline = egui::Stroke::new(1., config.foreground_color)
+                }
+                TextFormattingOverride::Strikethrough => {
+                    current_style.strikethrough = egui::Stroke::new(1., config.foreground_color)
+                }
+                TextFormattingOverride::Foreground(c) => current_style.color = c,
+                TextFormattingOverride::Background(c) => current_style.background = c,
+                _ => {}
+            }
+        }
+
+        last_offset = offset;
+    }
+    layout_job
 }
 
 pub(crate) fn console_ui(
@@ -394,18 +446,7 @@ pub(crate) fn console_ui(
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 for line in &state.scrollback {
-                                    let mut text = LayoutJob::default();
-
-                                    text.append(
-                                        &line.to_string(), //TOOD: once clap supports custom styling use it here
-                                        0f32,
-                                        TextFormat::simple(
-                                            FontId::monospace(14f32),
-                                            config.foreground_color,
-                                        ),
-                                    );
-
-                                    ui.label(text);
+                                    ui.label(style_ansi_text(line, &config));
                                 }
                             });
 
@@ -474,12 +515,12 @@ pub(crate) fn console_ui(
                         && ui.input(|i| i.key_pressed(egui::Key::Enter))
                     {
                         if state.buf.trim().is_empty() {
-                            state.scrollback.push(StyledStr::new());
+                            state.scrollback.push(String::new());
                         } else {
                             let msg = format!("{}{}", config.symbol, state.buf);
-                            state.scrollback.push(msg.into());
+                            state.scrollback.push(msg);
                             let cmd_string = state.buf.clone();
-                            state.history.insert(1, cmd_string.into());
+                            state.history.insert(1, cmd_string);
                             if state.history.len() > config.history_size + 1 {
                                 state.history.pop_back();
                             }
@@ -525,7 +566,7 @@ pub(crate) fn console_ui(
                         && state.history_index < state.history.len() - 1
                     {
                         if state.history_index == 0 && !state.buf.trim().is_empty() {
-                            *state.history.get_mut(0).unwrap() = state.buf.clone().into();
+                            *state.history.get_mut(0).unwrap() = state.buf.clone();
                         }
 
                         state.history_index += 1;

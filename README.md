@@ -7,6 +7,15 @@ A simple *Half-Life* inspired console with support for argument parsing powered 
   <img src="https://raw.githubusercontent.com/richodemus/bevy-console/main/doc/screenshot.png" width="100%">
 </p>
 
+## Features
+- [x] Command parsing with `clap`
+- [x] Command history
+- [x] Command completion
+- [x] Support for ansii colors
+- [x] Customizable key bindings
+- [x] Customizable theme
+- [x] Supports capturing Bevy logs to console
+
 ## Usage
 
 Add `ConsolePlugin` and optionally the resource `ConsoleConfiguration`.
@@ -66,6 +75,7 @@ cargo run --example log_command
 - [raw_commands](/examples/raw_commands.rs)
 - [write_to_console](/examples/write_to_console.rs)
 - [change_console_key](/examples/change_console_key.rs)
+- [capture_bevy_logs](/examples/capture_bevy_logs.rs)
 
 ## wasm
 
