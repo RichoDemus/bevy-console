@@ -8,7 +8,6 @@ use bevy::{
     log::tracing_subscriber::{self, Registry},
     prelude::{EventWriter, ResMut, Resource},
 };
-use clap::builder::StyledStr;
 
 use crate::PrintConsoleLine;
 
