@@ -12,17 +12,17 @@ pub use crate::console::{
     AddConsoleCommand, Command, ConsoleCommand, ConsoleCommandEntered, ConsoleConfiguration,
     ConsoleOpen, NamedCommand, PrintConsoleLine,
 };
-// pub use color::{Style, StyledStr};
+pub use crate::log::*;
 
 use crate::console::{console_ui, receive_console_line, ConsoleState};
-
 pub use clap;
 
 // mod color;
+mod color;
 mod commands;
 mod console;
+mod log;
 mod macros;
-
 /// Console plugin.
 pub struct ConsolePlugin;
 
@@ -62,6 +62,7 @@ impl Plugin for ConsolePlugin {
                 (
                     console_ui.in_set(ConsoleSet::ConsoleUI),
                     receive_console_line.in_set(ConsoleSet::PostCommands),
+                    send_log_buffer_to_console.in_set(ConsoleSet::PostCommands),
                 ),
             )
             .configure_sets(
