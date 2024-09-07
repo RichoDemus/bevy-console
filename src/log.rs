@@ -4,12 +4,12 @@ use std::{
 };
 
 use bevy::{
-    app::App,
+    app::{App, Update},
     log::tracing_subscriber::{self, Registry},
-    prelude::{EventWriter, ResMut, Resource},
+    prelude::{EventWriter, IntoSystemConfigs, ResMut, Resource},
 };
 
-use crate::PrintConsoleLine;
+use crate::{ConsoleSet, PrintConsoleLine};
 
 /// Buffers logs written by bevy at runtime
 #[derive(Resource)]
@@ -63,6 +63,10 @@ pub fn make_layer(
 ) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> {
     let buffer = Arc::new(Mutex::new(std::io::Cursor::new(Vec::new())));
     app.insert_resource(BevyLogBuffer(buffer.clone()));
+    app.add_systems(
+        Update,
+        send_log_buffer_to_console.in_set(ConsoleSet::PostCommands),
+    );
 
     Some(Box::new(
         tracing_subscriber::fmt::Layer::new()

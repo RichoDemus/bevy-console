@@ -62,7 +62,6 @@ impl Plugin for ConsolePlugin {
                 (
                     console_ui.in_set(ConsoleSet::ConsoleUI),
                     receive_console_line.in_set(ConsoleSet::PostCommands),
-                    send_log_buffer_to_console.in_set(ConsoleSet::PostCommands),
                 ),
             )
             .configure_sets(
