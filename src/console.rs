@@ -208,6 +208,22 @@ impl PrintConsoleLine {
     }
 }
 
+#[derive(Clone)]
+pub struct AssociatedCommand {
+    pub command: clap::Command,
+    pub suggestions: Vec<Vec<String>>,
+}
+
+impl AssociatedCommand {
+    pub fn get_suggestions(&self, arg_index: usize) -> Vec<String> {
+        if let Some(arg_completions) = &self.suggestions.get(arg_index) {
+            return arg_completions.to_vec();
+        }
+
+        Vec::new()
+    }
+}
+
 /// Console configuration
 #[derive(Clone, Resource)]
 pub struct ConsoleConfiguration {
@@ -222,7 +238,7 @@ pub struct ConsoleConfiguration {
     /// Console width
     pub width: f32,
     /// Registered console commands
-    pub commands: BTreeMap<&'static str, clap::Command>,
+    pub commands: BTreeMap<&'static str, AssociatedCommand>,
     /// Number of commands to store in history
     pub history_size: usize,
     /// Line prefix symbol
@@ -237,7 +253,7 @@ pub struct ConsoleConfiguration {
     pub moveable: bool,
     /// show the title bar or not
     pub show_title_bar: bool,
-    /// Background color of console window  
+    /// Background color of console window
     pub background_color: Color32,
     /// Foreground (text) color
     pub foreground_color: Color32,
@@ -294,6 +310,40 @@ pub trait AddConsoleCommand {
         &mut self,
         system: impl IntoSystemConfigs<Params>,
     ) -> &mut Self;
+
+    /// Adds a console command with custom suggestions to the Bevy app.
+    ///
+    /// This method registers a console command along with a list of suggestions for each parameter.
+    /// The suggestions can be used to provide autocompletion or hints when using the command.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use bevy::prelude::*;
+    /// # use bevy_console::{AddConsoleCommand, ConsoleCommand};
+    /// # use clap::Parser;
+    /// App::new()
+    ///     .add_console_command_with_suggestions::<SetVolumeCommand, _>(
+    ///         set_volume_command,
+    ///         vec![
+    ///             vec!["master".to_string(), "music".to_string(), "sfx".to_string()],
+    ///             // we dont need suggestions for volume level, so we just pass in an empty vec
+    ///             Vec::new()
+    ///         ],
+    ///     );
+    /// #
+    /// # /// Sets the volume for a specified audio channel.
+    /// # #[derive(Parser, ConsoleCommand)]
+    /// # #[command(name = "set_volume")]
+    /// # struct SetVolumeCommand;
+    /// #
+    /// # fn set_volume_command(mut cmd: ConsoleCommand<SetVolumeCommand>) {}
+    /// ```
+    fn add_console_command_with_suggestions<T: Command, Params>(
+        &mut self,
+        system: impl IntoSystemConfigs<Params>,
+        completers: Vec<Vec<String>>,
+    ) -> &mut Self;
 }
 
 impl AddConsoleCommand for App {
@@ -311,7 +361,41 @@ impl AddConsoleCommand for App {
                     name
                 );
             }
-            config.commands.insert(name, command);
+            config.commands.insert(
+                name,
+                AssociatedCommand {
+                    command,
+                    suggestions: Vec::new(),
+                },
+            );
+        };
+
+        self.add_systems(Startup, sys)
+            .add_systems(Update, system.in_set(ConsoleSet::Commands))
+    }
+
+    fn add_console_command_with_suggestions<T: Command, Params>(
+        &mut self,
+        system: impl IntoSystemConfigs<Params>,
+        suggestions: Vec<Vec<String>>,
+    ) -> &mut Self {
+        let sys = move |mut config: ResMut<ConsoleConfiguration>| {
+            let command = T::command().no_binary_name(true);
+            // .color(clap::ColorChoice::Always);
+            let name = T::name();
+            if config.commands.contains_key(name) {
+                warn!(
+                    "console command '{}' already registered and was overwritten",
+                    name
+                );
+            }
+            config.commands.insert(
+                name,
+                AssociatedCommand {
+                    command,
+                    suggestions: suggestions.clone(),
+                },
+            );
         };
 
         self.add_systems(Startup, sys)
@@ -332,6 +416,8 @@ pub(crate) struct ConsoleState {
     pub(crate) scrollback: Vec<String>,
     pub(crate) history: VecDeque<String>,
     pub(crate) history_index: usize,
+    pub(crate) suggestions: Vec<String>,
+    pub(crate) selected_suggestion: usize,
 }
 
 impl Default for ConsoleState {
@@ -341,6 +427,8 @@ impl Default for ConsoleState {
             scrollback: Vec::new(),
             history: VecDeque::from([String::new()]),
             history_index: 0,
+            suggestions: Vec::new(),
+            selected_suggestion: 0,
         }
     }
 }
@@ -460,48 +548,177 @@ pub(crate) fn console_ui(
                     ui.separator();
 
                     // Input
-                    let text_edit = TextEdit::singleline(&mut state.buf)
+                    let mut buf = state.buf.clone();
+                    let text_edit = TextEdit::singleline(&mut buf)
                         .desired_width(f32::INFINITY)
                         .lock_focus(true)
                         .font(egui::TextStyle::Monospace);
 
                     let text_edit_response = ui.add(text_edit);
+                    state.buf = buf;
+
+                    let mut new_suggestions = Vec::new();
+                    let mut show_suggestions = false;
+
+                    // Handle Tab key for cycling through suggestions
+                    if ui.input(|i| i.key_pressed(egui::Key::Tab)) {
+                        if !state.suggestions.is_empty() {
+                            state.selected_suggestion =
+                                (state.selected_suggestion + 1) % state.suggestions.len();
+                        }
+                        // Request focus back to the text edit
+                        ui.memory_mut(|m| m.request_focus(text_edit_response.id));
+                    }
+
+                    // Handle Enter key
+                    if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        if !state.suggestions.is_empty() {
+                            let suggestion = state.suggestions[state.selected_suggestion].clone();
+                            if state.buf.contains(' ') {
+                                let last_space = state.buf.rfind(' ').unwrap();
+                                let prefix = &state.buf[..=last_space];
+                                state.buf = format!("{}{} ", prefix, suggestion);
+                            } else {
+                                state.buf = suggestion + " ";
+                            }
+                            state.selected_suggestion = 0;
+                            state.suggestions.clear();
+
+                            // Update cursor position
+                            set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
+                        } else {
+                            if state.buf.trim().is_empty() {
+                                state.scrollback.push(String::new());
+                            } else {
+                                let msg = format!("{}{}", config.symbol, state.buf);
+                                state.scrollback.push(msg);
+                                
+                                let cmd_string = state.buf.clone();
+                                state.history.insert(1, cmd_string);
+                                
+                                if state.history.len() > config.history_size + 1 {
+                                    state.history.pop_back();
+                                }
+
+                                let mut args = Shlex::new(&state.buf).collect::<Vec<_>>();
+
+                                if !args.is_empty() {
+                                    let command_name = args.remove(0);
+                                    debug!(
+                                        "Command entered: `{command_name}`, with args: `{args:?}`"
+                                    );
+
+                                    let command = config.commands.get(command_name.as_str());
+
+                                    if command.is_some() {
+                                        command_entered
+                                            .send(ConsoleCommandEntered { command_name, args });
+                                    } else {
+                                        debug!(
+                                            "Command not recognized, recognized commands: `{:?}`",
+                                            config.commands.keys().collect::<Vec<_>>()
+                                        );
+
+                                        state.scrollback.push("error: Invalid command".into());
+                                    }
+                                }
+
+                                state.buf.clear();
+                            }
+                        }
+                        // Request focus back to the text edit
+                        ui.memory_mut(|m| m.request_focus(text_edit_response.id));
+                    }
 
                     // show a few suggestions
                     if text_edit_response.has_focus() && !state.buf.is_empty() {
+                        let text_edit_width = text_edit_response.rect.width();
+
                         // create the area to show suggestions
                         let suggestions_area = egui::Area::new(ui.auto_id_with("suggestions"))
                             .fixed_pos(ui.next_widget_position())
                             .movable(false);
-                        suggestions_area.show(ui.ctx(), |ui| {
-                            // collect the given number of commands starting
-                            // with the given text
-                            let command_names = &config
-                                .commands
-                                .iter()
-                                .map(|c| *c.0)
-                                .filter(|c| c.starts_with(&state.buf))
-                                .collect::<Vec<_>>();
 
-                            // show each command in the list
-                            for command in command_names.iter().take(config.num_suggestions) {
+                        suggestions_area.show(ui.ctx(), |ui| {
+                            // ensure that the suggestions box doesnt shrink when suggestions change
+                            ui.set_min_width(text_edit_width);
+                            ui.set_max_width(text_edit_width);
+
+                            // split the buffer into a command and its args
+                            let mut parts = state.buf.trim_start().split_whitespace();
+                            let command = parts.next();
+                            let args: Vec<&str> = parts.collect();
+
+                            // determine if user is typing out the command or an arg
+                            let (current_arg, arg_index) = if state.buf.ends_with(' ') {
+                                ("", args.len())
+                            } else {
+                                // if typing an arg, get the currently assigned arg and
+                                // the index of the arg to use for suggestions
+                                (*args.last().unwrap_or(&""), args.len().saturating_sub(1))
+                            };
+
+                            new_suggestions = if let (Some(command), true) =
+                                (command, args.len() > 0 || state.buf.ends_with(' '))
+                            {
+                                // generate argument suggestions if typing an arg
+                                config.commands.get(command).map_or(Vec::new(), |command| {
+                                    command
+                                        .get_suggestions(arg_index)
+                                        .iter()
+                                        .filter(|c| c.starts_with(&current_arg))
+                                        .cloned()
+                                        .collect()
+                                })
+                            } else {
+                                // generate a list of commands if typing a command
+                                config
+                                    .commands
+                                    .keys()
+                                    .filter(|c| c.starts_with(&state.buf))
+                                    .map(|&s| s.to_string())
+                                    .collect()
+                            };
+
+                            new_suggestions.truncate(config.num_suggestions);
+                            show_suggestions = !new_suggestions.is_empty();
+
+                            // display suggestions
+                            for (index, suggestion) in new_suggestions.iter().enumerate() {
                                 let mut layout_job = egui::text::LayoutJob::default();
+
+                                let (matching, remaining) = if command.is_none() {
+                                    (state.buf.as_str(), &suggestion[state.buf.len()..])
+                                } else {
+                                    (current_arg, &suggestion[current_arg.len()..])
+                                };
+
+                                let color = if index == state.selected_suggestion {
+                                    Color32::YELLOW
+                                } else {
+                                    Color32::WHITE
+                                };
+
                                 layout_job.append(
-                                    state.buf.as_str(),
+                                    matching,
                                     0.0,
                                     TextFormat {
                                         font_id: FontId::new(14.0, egui::FontFamily::Monospace),
-                                        underline: egui::Stroke::new(1., Color32::WHITE),
-                                        color: Color32::WHITE,
+                                        underline: egui::Stroke::new(1., color),
+                                        color,
                                         ..default()
                                     },
                                 );
                                 layout_job.append(
-                                    &command[state.buf.len()..],
+                                    remaining,
                                     0.0,
                                     TextFormat {
                                         font_id: FontId::new(14.0, egui::FontFamily::Monospace),
-                                        color: Color32::LIGHT_GRAY,
+                                        color: if index == state.selected_suggestion {
+                                            Color32::LIGHT_YELLOW
+                                        } else {
+                                            Color32::LIGHT_GRAY
+                                        },
                                         ..default()
                                     },
                                 );
@@ -510,45 +727,7 @@ pub(crate) fn console_ui(
                         });
                     }
 
-                    // Handle enter
-                    if text_edit_response.lost_focus()
-                        && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                    {
-                        if state.buf.trim().is_empty() {
-                            state.scrollback.push(String::new());
-                        } else {
-                            let msg = format!("{}{}", config.symbol, state.buf);
-                            state.scrollback.push(msg);
-                            let cmd_string = state.buf.clone();
-                            state.history.insert(1, cmd_string);
-                            if state.history.len() > config.history_size + 1 {
-                                state.history.pop_back();
-                            }
-
-                            let mut args = Shlex::new(&state.buf).collect::<Vec<_>>();
-
-                            if !args.is_empty() {
-                                let command_name = args.remove(0);
-                                debug!("Command entered: `{command_name}`, with args: `{args:?}`");
-
-                                let command = config.commands.get(command_name.as_str());
-
-                                if command.is_some() {
-                                    command_entered
-                                        .send(ConsoleCommandEntered { command_name, args });
-                                } else {
-                                    debug!(
-                                        "Command not recognized, recognized commands: `{:?}`",
-                                        config.commands.keys().collect::<Vec<_>>()
-                                    );
-
-                                    state.scrollback.push("error: Invalid command".into());
-                                }
-                            }
-
-                            state.buf.clear();
-                        }
-                    }
+                    state.suggestions = new_suggestions;
 
                     // Clear on ctrl+l
                     if keyboard_input_events
@@ -560,8 +739,7 @@ pub(crate) fn console_ui(
                     }
 
                     // Handle up and down through history
-                    if text_edit_response.has_focus()
-                        && ui.input(|i| i.key_pressed(egui::Key::ArrowUp))
+                    if ui.input(|i| i.key_pressed(egui::Key::ArrowUp))
                         && state.history.len() > 1
                         && state.history_index < state.history.len() - 1
                     {
@@ -571,16 +749,15 @@ pub(crate) fn console_ui(
 
                         state.history_index += 1;
                         let previous_item = state.history.get(state.history_index).unwrap().clone();
-                        state.buf = previous_item.to_string();
+                        state.buf = previous_item;
 
                         set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
-                    } else if text_edit_response.has_focus()
-                        && ui.input(|i| i.key_pressed(egui::Key::ArrowDown))
+                    } else if ui.input(|i| i.key_pressed(egui::Key::ArrowDown))
                         && state.history_index > 0
                     {
                         state.history_index -= 1;
                         let next_item = state.history.get(state.history_index).unwrap().clone();
-                        state.buf = next_item.to_string();
+                        state.buf = next_item;
 
                         set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
                     }

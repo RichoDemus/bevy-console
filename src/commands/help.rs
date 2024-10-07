@@ -20,7 +20,7 @@ pub(crate) fn help_command(
         Some(Ok(HelpCommand { command: Some(cmd) })) => match config.commands.get_mut(cmd.as_str())
         {
             Some(command_info) => {
-                help.reply(command_info.render_long_help().to_string());
+                help.reply(command_info.command.render_long_help().to_string());
             }
             None => {
                 reply!(help, "Command '{}' does not exist", cmd);
@@ -35,11 +35,13 @@ pub(crate) fn help_command(
                 .map(|name| name.len())
                 .max()
                 .unwrap_or(0);
-            for (name, cmd) in &config.commands {
+            for (name, a_cmd) in &config.commands {
                 let mut line = format!("  {name}{}", " ".repeat(longest_command_name - name.len()));
                 line.push_str(&format!(
                     " - {}",
-                    cmd.get_about()
+                    a_cmd
+                        .command
+                        .get_about()
                         .map(|about| about.to_string())
                         .unwrap_or_default()
                 ));
