@@ -436,8 +436,8 @@ pub(crate) fn console_ui(
                 ui.style_mut().visuals.override_text_color = Some(config.foreground_color);
 
                 ui.vertical(|ui| {
-                    let scroll_height = ui.available_height() - 30.0;
-
+                    const WRITE_AREA_HEIGHT: f32 = 30.0;
+                    let scroll_height = ui.available_height() - WRITE_AREA_HEIGHT;
                     // Scroll area
                     ScrollArea::vertical()
                         .auto_shrink([false, false])
@@ -473,18 +473,21 @@ pub(crate) fn console_ui(
                         let suggestions_area = egui::Area::new(ui.auto_id_with("suggestions"))
                             .fixed_pos(ui.next_widget_position())
                             .movable(false);
+
                         suggestions_area.show(ui.ctx(), |ui| {
-                            // collect the given number of commands starting
-                            // with the given text
-                            let command_names = &config
-                                .commands
-                                .iter()
-                                .map(|c| *c.0)
-                                .filter(|c| c.starts_with(&state.buf))
-                                .collect::<Vec<_>>();
+                            // ui.set_max_height(WRITE_AREA_HEIGHT);
+                            ui.set_min_width(config.width);
 
                             // show each command in the list
-                            for command in command_names.iter().take(config.num_suggestions) {
+                            let mut left_suggestions = config.num_suggestions;
+                            for command in config
+                                .commands
+                                .iter()
+                                .filter_map(|(n, _)| n.starts_with(&state.buf).then_some(n))
+                            {
+                                if left_suggestions == 0 {
+                                    break;
+                                }
                                 let mut layout_job = egui::text::LayoutJob::default();
                                 layout_job.append(
                                     state.buf.as_str(),
@@ -506,6 +509,7 @@ pub(crate) fn console_ui(
                                     },
                                 );
                                 ui.label(layout_job);
+                                left_suggestions -= 1;
                             }
                         });
                     }
@@ -639,6 +643,7 @@ mod tests {
             logical_key: Key::Unidentified(NativeKey::Xkb(41)),
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
+            repeat: false,
         };
 
         let config = vec![KeyCode::Unidentified(NativeKeyCode::Xkb(41))];
@@ -654,6 +659,7 @@ mod tests {
             logical_key: Key::Unidentified(NativeKey::Xkb(42)),
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
+            repeat: false,
         };
 
         let config = vec![KeyCode::Unidentified(NativeKeyCode::Xkb(41))];
@@ -669,6 +675,7 @@ mod tests {
             logical_key: Key::Character("`".into()),
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
+            repeat: false,
         };
 
         let config = vec![KeyCode::Backquote];
@@ -684,6 +691,7 @@ mod tests {
             logical_key: Key::Character("A".into()),
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
+            repeat: false,
         };
 
         let config = vec![KeyCode::Backquote];
@@ -699,6 +707,7 @@ mod tests {
             logical_key: Key::Character("`".into()),
             state: ButtonState::Released,
             window: Entity::PLACEHOLDER,
+            repeat: false,
         };
 
         let config = vec![KeyCode::Backquote];
