@@ -20,6 +20,7 @@ jobs:
     steps:
     - name: Mask secrets
       run: |
+        cat $GITHUB_EVENT_PATH
         $CARGO_REGISTRY_TOKEN=$(jq -r '.inputs["cargo-registry-token"]' $GITHUB_EVENT_PATH)
         echo ::add-mask::$CARGO_REGISTRY_TOKEN
         echo $CARGO_REGISTRY_TOKEN=$CARGO_REGISTRY_TOKEN >> $GITHUB_ENV
