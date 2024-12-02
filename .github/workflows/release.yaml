@@ -39,11 +39,11 @@ jobs:
           ${{ runner.os }}-cargo-index-
 
     - name: Run cargo publish
-      if : ${{ inputs.dry-run == 'false' }}
+      if : ${{ !fromJSON(inputs.dry-run) }}
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       run: cargo publish 
-      
+
     - name: Run cargo publish --dry-run
-      if : ${{ inputs.dry-run == 'true' }}
+      if : ${{ fromJSON(inputs.dry-run) }}
       run: cargo publish --dry-run
