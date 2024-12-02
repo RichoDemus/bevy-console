@@ -23,8 +23,7 @@ jobs:
         $CARGO_REGISTRY_TOKEN = (jq -r '.inputs["cargo-registry-token"]' $env:GITHUB_EVENT_PATH)
         Write-Output "::add-mask::$CARGO_REGISTRY_TOKEN"
         Write-Output "CARGO_REGISTRY_TOKEN=$CARGO_REGISTRY_TOKEN" >> $env:GITHUB_ENV
-    - name: Test secret mask
-      run: echo "this is not the secret you fool ${{ env.CARGO_REGISTRY_TOKEN}} "
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
