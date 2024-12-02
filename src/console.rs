@@ -469,8 +469,6 @@ pub(crate) fn console_ui(
 
                     // show a few suggestions
                     if text_edit_response.has_focus() && !state.buf.is_empty() {
-                        println!("{}", state.buf);
-
                         // create the area to show suggestions
                         let suggestions_area = egui::Area::new(ui.auto_id_with("suggestions"))
                             .fixed_pos(ui.next_widget_position())
