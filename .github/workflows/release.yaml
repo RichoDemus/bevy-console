@@ -1,12 +1,13 @@
 name: Release
 
-on: workflow_dispatch
-  inputs:
-    dry-run:
-      description: 'Run cargo publish --dry-run'
-      required: true
-      type: boolean
-      default: true
+on: 
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Run cargo publish --dry-run'
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   publish:
