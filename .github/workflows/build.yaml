@@ -8,14 +8,18 @@ on:
       - main
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     env:
       RUSTFLAGS: -D warnings
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install alsa and udev
+        if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
       - name: Load cargo cache
         uses: actions/cache@v3
