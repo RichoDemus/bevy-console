@@ -358,6 +358,9 @@ fn style_ansi_text(str: &str, config: &ConsoleConfiguration) -> LayoutJob {
         .into_iter()
         .chain(once((str_without_ansi.len(), Default::default())))
     {
+        if last_offset > str_without_ansi.len() || offset > str_without_ansi.len() {
+            continue;
+        }
         // 1<red>2345</red>
         // 01234
         let text = &str_without_ansi[(last_offset)..offset];
