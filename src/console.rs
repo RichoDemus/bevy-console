@@ -13,12 +13,9 @@ use bevy_egui::{
 };
 use clap::{CommandFactory, FromArgMatches};
 use shlex::Shlex;
+use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::mem;
-use std::{
-    collections::{BTreeMap, VecDeque},
-    iter::once,
-};
 
 use crate::{
     color::{parse_ansi_styled_str, TextFormattingOverride},
@@ -70,7 +67,7 @@ pub struct ConsoleCommand<'w, T> {
     console_line: EventWriter<'w, PrintConsoleLine>,
 }
 
-impl<'w, T> ConsoleCommand<'w, T> {
+impl<T> ConsoleCommand<'_, T> {
     /// Returns Some(T) if the command was executed and arguments were valid.
     ///
     /// This method should only be called once.
