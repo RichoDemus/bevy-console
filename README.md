@@ -11,7 +11,7 @@ A simple *Half-Life* inspired console with support for argument parsing powered 
 - [x] Command parsing with `clap`
 - [x] Command history
 - [x] Command completion
-- [x] Support for ansii colors
+- [x] Support for ansi colors
 - [x] Customizable key bindings
 - [x] Customizable theme
 - [x] Supports capturing Bevy logs to console
