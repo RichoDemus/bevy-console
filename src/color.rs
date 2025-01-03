@@ -5,45 +5,78 @@ use bevy_egui::egui::Color32;
 
 pub(crate) fn parse_ansi_styled_str(
     ansi_string: &str,
-) -> Vec<(usize, HashSet<TextFormattingOverride>)> {
-    let mut result: Vec<(usize, HashSet<TextFormattingOverride>)> = Vec::new();
-    let mut offset = 0;
+) -> Vec<(&str, HashSet<TextFormattingOverride>)> {
+    let mut result: Vec<(&str, HashSet<TextFormattingOverride>)> = Vec::new();
+    let mut current_overrides = HashSet::new();
     for element in ansi_string.ansi_parse() {
         match element {
             ansi_parser::Output::TextBlock(t) => {
-                offset += t.len();
+                result.push((t, current_overrides.clone()));
             }
             ansi_parser::Output::Escape(escape) => {
                 if let ansi_parser::AnsiSequence::SetGraphicsMode(mode) = escape {
                     let modes = parse_graphics_mode(mode.as_slice());
-                    if let Some((last_offset, last)) = result.last_mut() {
-                        if *last_offset == offset {
-                            last.extend(modes);
-                            continue;
-                        }
+                    for m in modes.iter() {
+                        apply_set_graphics_mode(&mut current_overrides, *m);
                     }
-
-                    result.push((offset, modes));
-                };
+                }
             }
         }
     }
     result
 }
 
+fn apply_set_graphics_mode(
+    set_overrides: &mut HashSet<TextFormattingOverride>,
+    new: TextFormattingOverride,
+) {
+    match new {
+        TextFormattingOverride::ResetEveryting => {
+            set_overrides.clear();
+        }
+        TextFormattingOverride::ResetDimAndBold => {
+            set_overrides.remove(&TextFormattingOverride::Dim);
+            set_overrides.remove(&TextFormattingOverride::Bold);
+        }
+        TextFormattingOverride::ResetItalicsAndFraktur => {
+            set_overrides.remove(&TextFormattingOverride::Italic);
+        }
+        TextFormattingOverride::ResetUnderline => {
+            set_overrides.remove(&TextFormattingOverride::Underline);
+        }
+        TextFormattingOverride::ResetStrikethrough => {
+            set_overrides.remove(&TextFormattingOverride::Strikethrough);
+        }
+        TextFormattingOverride::ResetForegroundColor => {
+            set_overrides.retain(|o| !matches!(o, TextFormattingOverride::Foreground(_)));
+        }
+        TextFormattingOverride::ResetBackgroundColor => {
+            set_overrides.retain(|o| !matches!(o, TextFormattingOverride::Background(_)));
+        }
+        _ => {
+            set_overrides.insert(new);
+        }
+    }
+}
+
 fn parse_graphics_mode(modes: &[u8]) -> HashSet<TextFormattingOverride> {
     let mut results = HashSet::new();
     for mode in modes.iter() {
         let result = match *mode {
-            0 => TextFormattingOverride::Reset,
             1 => TextFormattingOverride::Bold,
             2 => TextFormattingOverride::Dim,
             3 => TextFormattingOverride::Italic,
             4 => TextFormattingOverride::Underline,
             9 => TextFormattingOverride::Strikethrough,
+            22 => TextFormattingOverride::ResetDimAndBold,
+            23 => TextFormattingOverride::ResetItalicsAndFraktur,
+            24 => TextFormattingOverride::ResetUnderline,
+            29 => TextFormattingOverride::ResetStrikethrough,
             30..=37 => TextFormattingOverride::Foreground(ansi_color_code_to_color32(mode - 30)),
+            39 => TextFormattingOverride::ResetForegroundColor,
             40..=47 => TextFormattingOverride::Background(ansi_color_code_to_color32(mode - 40)),
-            _ => TextFormattingOverride::Reset,
+            49 => TextFormattingOverride::ResetBackgroundColor,
+            _ => TextFormattingOverride::ResetEveryting,
         };
         results.insert(result);
     }
@@ -73,7 +106,13 @@ fn ansi_color_code_to_color32(color_code: u8) -> Color32 {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TextFormattingOverride {
-    Reset,
+    ResetEveryting,
+    ResetDimAndBold,
+    ResetItalicsAndFraktur,
+    ResetUnderline,
+    ResetStrikethrough,
+    ResetForegroundColor,
+    ResetBackgroundColor,
     Bold,
     Dim,
     Italic,
@@ -93,10 +132,7 @@ mod test {
         let result = parse_ansi_styled_str(ansi_string);
         assert_eq!(
             result,
-            vec![
-                (0, HashSet::from([TextFormattingOverride::Bold])),
-                (5, HashSet::from([TextFormattingOverride::Reset]))
-            ]
+            vec![("12345", HashSet::from([TextFormattingOverride::Bold])),]
         );
     }
 
@@ -106,10 +142,7 @@ mod test {
         let result = parse_ansi_styled_str(ansi_string);
         assert_eq!(
             result,
-            vec![
-                (0, HashSet::from([TextFormattingOverride::Underline])),
-                (5, HashSet::from([TextFormattingOverride::Reset]))
-            ]
+            vec![("12345", HashSet::from([TextFormattingOverride::Underline])),]
         );
     }
 
@@ -119,10 +152,7 @@ mod test {
         let result = parse_ansi_styled_str(ansi_string);
         assert_eq!(
             result,
-            vec![
-                (0, HashSet::from([TextFormattingOverride::Italic])),
-                (5, HashSet::from([TextFormattingOverride::Reset]))
-            ]
+            vec![("12345", HashSet::from([TextFormattingOverride::Italic])),]
         );
     }
 
@@ -132,10 +162,7 @@ mod test {
         let result = parse_ansi_styled_str(ansi_string);
         assert_eq!(
             result,
-            vec![
-                (0, HashSet::from([TextFormattingOverride::Dim])),
-                (5, HashSet::from([TextFormattingOverride::Reset]))
-            ]
+            vec![("12345", HashSet::from([TextFormattingOverride::Dim])),]
         );
     }
 
@@ -145,10 +172,10 @@ mod test {
         let result = parse_ansi_styled_str(ansi_string);
         assert_eq!(
             result,
-            vec![
-                (0, HashSet::from([TextFormattingOverride::Strikethrough])),
-                (5, HashSet::from([TextFormattingOverride::Reset]))
-            ]
+            vec![(
+                "12345",
+                HashSet::from([TextFormattingOverride::Strikethrough])
+            ),]
         );
     }
 
@@ -158,15 +185,12 @@ mod test {
         let result = parse_ansi_styled_str(ansi_string);
         assert_eq!(
             result,
-            vec![
-                (
-                    0,
-                    HashSet::from([TextFormattingOverride::Foreground(Color32::from_rgb(
-                        222, 56, 43
-                    ))])
-                ),
-                (5, HashSet::from([TextFormattingOverride::Reset]))
-            ]
+            vec![(
+                "12345",
+                HashSet::from([TextFormattingOverride::Foreground(Color32::from_rgb(
+                    222, 56, 43
+                ))])
+            ),]
         );
     }
 
@@ -176,15 +200,12 @@ mod test {
         let result = parse_ansi_styled_str(ansi_string);
         assert_eq!(
             result,
-            vec![
-                (
-                    0,
-                    HashSet::from([TextFormattingOverride::Background(Color32::from_rgb(
-                        222, 56, 43
-                    ))])
-                ),
-                (5, HashSet::from([TextFormattingOverride::Reset]))
-            ]
+            vec![(
+                "12345",
+                HashSet::from([TextFormattingOverride::Background(Color32::from_rgb(
+                    222, 56, 43
+                ))])
+            ),]
         );
     }
 
@@ -194,16 +215,13 @@ mod test {
         let result = parse_ansi_styled_str(ansi_string);
         assert_eq!(
             result,
-            vec![
-                (
-                    0,
-                    HashSet::from([
-                        TextFormattingOverride::Foreground(Color32::from_rgb(222, 56, 43)),
-                        TextFormattingOverride::Bold,
-                    ])
-                ),
-                (5, HashSet::from([TextFormattingOverride::Reset]))
-            ]
+            vec![(
+                "12345",
+                HashSet::from([
+                    TextFormattingOverride::Foreground(Color32::from_rgb(222, 56, 43)),
+                    TextFormattingOverride::Bold,
+                ])
+            ),]
         );
     }
 
@@ -214,15 +232,13 @@ mod test {
         assert_eq!(
             result,
             vec![
-                (0, HashSet::from([TextFormattingOverride::Bold])),
+                ("12345", HashSet::from([TextFormattingOverride::Bold])),
                 (
-                    5,
-                    HashSet::from([
-                        TextFormattingOverride::Reset,
-                        TextFormattingOverride::Foreground(Color32::from_rgb(222, 56, 43))
-                    ])
+                    "12345",
+                    HashSet::from([TextFormattingOverride::Foreground(Color32::from_rgb(
+                        222, 56, 43
+                    ))])
                 ),
-                (10, HashSet::from([TextFormattingOverride::Reset]))
             ]
         );
     }
@@ -234,14 +250,83 @@ mod test {
         assert_eq!(
             result,
             vec![
-                (0, HashSet::from([TextFormattingOverride::Bold])),
+                ("12345", HashSet::from([TextFormattingOverride::Bold,])),
                 (
-                    5,
+                    "12345",
+                    HashSet::from([
+                        TextFormattingOverride::Bold,
+                        TextFormattingOverride::Foreground(Color32::from_rgb(222, 56, 43))
+                    ])
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn overlapping_non_symmetric_styles_followed_by_non_styled() {
+        let ansi_string = color_print::cstr!(r#"<bold>12345<red>12345</red></bold>end"#);
+        let result = parse_ansi_styled_str(ansi_string);
+        assert_eq!(
+            result,
+            vec![
+                ("12345", HashSet::from([TextFormattingOverride::Bold,])),
+                (
+                    "12345",
+                    HashSet::from([
+                        TextFormattingOverride::Bold,
+                        TextFormattingOverride::Foreground(Color32::from_rgb(222, 56, 43))
+                    ])
+                ),
+                ("end", HashSet::from([])),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_complex_example() {
+        let example = "\0\0\u{1b}[2m2025-01-03T16:58:02.690280Z\u{1b}[0m \u{1b}[31mERROR\u{1b}[0m error: Could not find function: Displaying ScriptValue without world access: String(";
+
+        let result = parse_ansi_styled_str(example);
+
+        assert_eq!(
+            result,
+            vec![
+                ("\0\0", HashSet::from([])),
+                (
+                    "2025-01-03T16:58:02.690280Z",
+                    HashSet::from([TextFormattingOverride::Dim])
+                ),
+                (" ", HashSet::from([])),
+                (
+                    "ERROR",
+                    HashSet::from([TextFormattingOverride::Foreground(Color32::from_rgb(222, 56, 43))])
+                ),
+                (" error: Could not find function: Displaying ScriptValue without world access: String(", HashSet::from([])),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_complex_example_2() {
+        let example = "\u{1b}[2m2025-01-03T19:20:08.083551Z\u{1b}[0m \u{1b}[32m INFO\u{1b}[0m Bye!";
+
+        let result = parse_ansi_styled_str(example);
+
+        assert_eq!(
+            result,
+            vec![
+                (
+                    "2025-01-03T19:20:08.083551Z",
+                    HashSet::from([TextFormattingOverride::Dim])
+                ),
+                (" ", HashSet::from([])),
+                (
+                    " INFO",
                     HashSet::from([TextFormattingOverride::Foreground(Color32::from_rgb(
-                        222, 56, 43
+                        57, 181, 74
                     ))])
                 ),
-                (10, HashSet::from([TextFormattingOverride::Reset]))
+                (" Bye!", HashSet::from([])),
             ]
         );
     }

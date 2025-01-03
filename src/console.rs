@@ -13,12 +13,9 @@ use bevy_egui::{
 };
 use clap::{CommandFactory, FromArgMatches};
 use shlex::Shlex;
+use std::collections::{BTreeMap, VecDeque};
 use std::marker::PhantomData;
 use std::mem;
-use std::{
-    collections::{BTreeMap, VecDeque},
-    iter::once,
-};
 
 use crate::{
     color::{parse_ansi_styled_str, TextFormattingOverride},
@@ -70,7 +67,7 @@ pub struct ConsoleCommand<'w, T> {
     console_line: EventWriter<'w, PrintConsoleLine>,
 }
 
-impl<'w, T> ConsoleCommand<'w, T> {
+impl<T> ConsoleCommand<'_, T> {
     /// Returns Some(T) if the command was executed and arguments were valid.
     ///
     /// This method should only be called once.
@@ -351,28 +348,16 @@ fn default_style(config: &ConsoleConfiguration) -> TextFormat {
 
 fn style_ansi_text(str: &str, config: &ConsoleConfiguration) -> LayoutJob {
     let mut layout_job = LayoutJob::default();
-    let mut current_style = default_style(config);
-    let mut last_offset = 0;
-    let str_without_ansi = strip_ansi_escapes::strip_str(str);
-    for (offset, overrides) in parse_ansi_styled_str(str)
-        .into_iter()
-        .chain(once((str_without_ansi.len(), Default::default())))
-    {
-        // 1<red>2345</red>
-        // 01234
-        let text = &str_without_ansi[(last_offset)..offset];
-        if !text.is_empty() {
-            layout_job.append(text, 0f32, current_style.clone());
-        }
-
-        if overrides.contains(&TextFormattingOverride::Reset) {
-            current_style = default_style(config);
-        }
+    for (str, overrides) in parse_ansi_styled_str(str).into_iter() {
+        let mut current_style = default_style(config);
 
         for o in overrides {
             match o {
                 TextFormattingOverride::Bold => current_style.font_id.size = 16f32, // no support for bold font families in egui TODO: when egui supports bold font families, use them here
-                TextFormattingOverride::Dim => current_style.font_id.size = 12f32, // no support for dim font families in egui TODO: when egui supports dim font families, use them here
+                TextFormattingOverride::Dim => {
+                    // no support for dim font families in egui TODO: when egui supports dim font families, use them here
+                    current_style.color = current_style.color.gamma_multiply(0.5);
+                }
                 TextFormattingOverride::Italic => current_style.italics = true,
                 TextFormattingOverride::Underline => {
                     current_style.underline = egui::Stroke::new(1., config.foreground_color)
@@ -386,7 +371,9 @@ fn style_ansi_text(str: &str, config: &ConsoleConfiguration) -> LayoutJob {
             }
         }
 
-        last_offset = offset;
+        if !str.is_empty() {
+            layout_job.append(str, 0f32, current_style.clone());
+        }
     }
     layout_job
 }
