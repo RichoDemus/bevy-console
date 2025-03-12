@@ -61,8 +61,7 @@ pub fn send_log_buffer_to_console(
 /// Use [make_filtered_layer] for more customization options.
 pub fn make_layer(
     app: &mut App,
-) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>>
-{
+) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> {
     setup_layer(app, None)
 }
 
@@ -83,8 +82,7 @@ pub fn make_layer(
 pub fn make_filtered_layer(
     app: &mut App,
     filter: String,
-) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>>
-{
+) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> {
     let env_filter = EnvFilter::builder().parse_lossy(filter);
     setup_layer(app, Some(env_filter))
 }
@@ -93,8 +91,7 @@ pub fn make_filtered_layer(
 fn setup_layer(
     app: &mut App,
     filter: Option<EnvFilter>,
-) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>>
-{
+) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> {
     let buffer = Arc::new(Mutex::new(std::io::Cursor::new(Vec::new())));
     app.insert_resource(BevyLogBuffer(buffer.clone()));
     app.add_systems(
@@ -105,16 +102,20 @@ fn setup_layer(
     let layer: Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>;
     layer = if let Some(filter) = filter {
         // Layer::with_filter() returns a different impl, thus the split
-        Box::new(tracing_subscriber::fmt::Layer::new()
-            .with_target(false)
-            .with_ansi(true)
-            .with_writer(move || BevyLogBufferWriter(buffer.clone()))
-            .with_filter(filter))
+        Box::new(
+            tracing_subscriber::fmt::Layer::new()
+                .with_target(false)
+                .with_ansi(true)
+                .with_writer(move || BevyLogBufferWriter(buffer.clone()))
+                .with_filter(filter),
+        )
     } else {
-        Box::new(tracing_subscriber::fmt::Layer::new()
-            .with_target(false)
-            .with_ansi(true)
-            .with_writer(move || BevyLogBufferWriter(buffer.clone())))
+        Box::new(
+            tracing_subscriber::fmt::Layer::new()
+                .with_target(false)
+                .with_ansi(true)
+                .with_writer(move || BevyLogBufferWriter(buffer.clone())),
+        )
     };
 
     Some(layer)
