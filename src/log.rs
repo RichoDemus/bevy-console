@@ -5,7 +5,7 @@ use std::{
 
 use bevy::{
     app::{App, Update},
-    log::tracing_subscriber::{self, Registry},
+    log::tracing_subscriber::{self, EnvFilter, Layer, Registry},
     prelude::{EventWriter, IntoSystemConfigs, ResMut, Resource},
 };
 
@@ -58,8 +58,39 @@ pub fn send_log_buffer_to_console(
 
 /// Creates a tracing layer which writes logs into a buffer resource inside the bevy world
 /// This is used by the console plugin to capture logs written by bevy
+/// Use [make_filtered_layer] for more customization options.
 pub fn make_layer(
     app: &mut App,
+) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> {
+    setup_layer(app, None)
+}
+
+/// Creates a tracing layer which writes logs into a buffer resource inside the bevy world
+/// Uses a custom [EnvFilter] string, allowing for a different subset of log entries to be
+/// captured by the console.
+/// This is used by the console plugin to capture logs written by bevy
+///
+/// ## Example
+/// ```ignore
+/// DefaultPlugins.set(LogPlugin {
+///    filter: log::DEFAULT_FILTER.to_string(),
+///    level: log::Level::INFO,
+///    custom_layer: |app: &mut App| make_filtered_layer(app,
+///        "mygame=info,warn,debug,error".to_string())
+///})
+///```
+pub fn make_filtered_layer(
+    app: &mut App,
+    filter: String,
+) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> {
+    let env_filter = EnvFilter::builder().parse_lossy(filter);
+    setup_layer(app, Some(env_filter))
+}
+
+/// Performs common layer setup
+fn setup_layer(
+    app: &mut App,
+    filter: Option<EnvFilter>,
 ) -> Option<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> {
     let buffer = Arc::new(Mutex::new(std::io::Cursor::new(Vec::new())));
     app.insert_resource(BevyLogBuffer(buffer.clone()));
@@ -68,10 +99,24 @@ pub fn make_layer(
         send_log_buffer_to_console.in_set(ConsoleSet::PostCommands),
     );
 
-    Some(Box::new(
-        tracing_subscriber::fmt::Layer::new()
-            .with_target(false)
-            .with_ansi(true)
-            .with_writer(move || BevyLogBufferWriter(buffer.clone())),
-    ))
+    let layer: Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>;
+    layer = if let Some(filter) = filter {
+        // Layer::with_filter() returns a different impl, thus the split
+        Box::new(
+            tracing_subscriber::fmt::Layer::new()
+                .with_target(false)
+                .with_ansi(true)
+                .with_writer(move || BevyLogBufferWriter(buffer.clone()))
+                .with_filter(filter),
+        )
+    } else {
+        Box::new(
+            tracing_subscriber::fmt::Layer::new()
+                .with_target(false)
+                .with_ansi(true)
+                .with_writer(move || BevyLogBufferWriter(buffer.clone())),
+        )
+    };
+
+    Some(layer)
 }
