@@ -1,6 +1,6 @@
 use bevy::ecs::{
     component::Tick,
-    system::{Resource, SystemMeta, SystemParam},
+    system::{ScheduleSystem, SystemMeta, SystemParam},
     world::unsafe_world_cell::UnsafeWorldCell,
 };
 use bevy::{input::keyboard::KeyboardInput, prelude::*};
@@ -78,27 +78,28 @@ impl<T> ConsoleCommand<'_, T> {
 
     /// Print `[ok]` in the console.
     pub fn ok(&mut self) {
-        self.console_line.send(PrintConsoleLine::new("[ok]".into()));
+        self.console_line
+            .write(PrintConsoleLine::new("[ok]".into()));
     }
 
     /// Print `[failed]` in the console.
     pub fn failed(&mut self) {
         self.console_line
-            .send(PrintConsoleLine::new("[failed]".into()));
+            .write(PrintConsoleLine::new("[failed]".into()));
     }
 
     /// Print a reply in the console.
     ///
     /// See [`reply!`](crate::reply) for usage with the [`format!`] syntax.
     pub fn reply(&mut self, msg: impl Into<String>) {
-        self.console_line.send(PrintConsoleLine::new(msg.into()));
+        self.console_line.write(PrintConsoleLine::new(msg.into()));
     }
 
     /// Print a reply in the console followed by `[ok]`.
     ///
     /// See [`reply_ok!`](crate::reply_ok) for usage with the [`format!`] syntax.
     pub fn reply_ok(&mut self, msg: impl Into<String>) {
-        self.console_line.send(PrintConsoleLine::new(msg.into()));
+        self.console_line.write(PrintConsoleLine::new(msg.into()));
         self.ok();
     }
 
@@ -106,7 +107,7 @@ impl<T> ConsoleCommand<'_, T> {
     ///
     /// See [`reply_failed!`](crate::reply_failed) for usage with the [`format!`] syntax.
     pub fn reply_failed(&mut self, msg: impl Into<String>) {
-        self.console_line.send(PrintConsoleLine::new(msg.into()));
+        self.console_line.write(PrintConsoleLine::new(msg.into()));
         self.failed();
     }
 }
@@ -168,7 +169,7 @@ unsafe impl<T: Command> SystemParam for ConsoleCommand<'_, T> {
                         return Some(T::from_arg_matches(&matches));
                     }
                     Err(err) => {
-                        console_line.send(PrintConsoleLine::new(err.to_string()));
+                        console_line.write(PrintConsoleLine::new(err.to_string()));
                         return Some(Err(err));
                     }
                 }
@@ -289,14 +290,14 @@ pub trait AddConsoleCommand {
     /// ```
     fn add_console_command<T: Command, Params>(
         &mut self,
-        system: impl IntoSystemConfigs<Params>,
+        system: impl IntoScheduleConfigs<ScheduleSystem, Params>,
     ) -> &mut Self;
 }
 
 impl AddConsoleCommand for App {
     fn add_console_command<T: Command, Params>(
         &mut self,
-        system: impl IntoSystemConfigs<Params>,
+        system: impl IntoScheduleConfigs<ScheduleSystem, Params>,
     ) -> &mut Self {
         let sys = move |mut config: ResMut<ConsoleConfiguration>| {
             let command = T::command().no_binary_name(true);
@@ -526,7 +527,7 @@ pub(crate) fn console_ui(
 
                                 if command.is_some() {
                                     command_entered
-                                        .send(ConsoleCommandEntered { command_name, args });
+                                        .write(ConsoleCommandEntered { command_name, args });
                                 } else {
                                     debug!(
                                         "Command not recognized, recognized commands: `{:?}`",
@@ -631,6 +632,7 @@ mod tests {
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
             repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Unidentified(NativeKeyCode::Xkb(41))];
@@ -647,6 +649,7 @@ mod tests {
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
             repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Unidentified(NativeKeyCode::Xkb(41))];
@@ -663,6 +666,7 @@ mod tests {
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
             repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Backquote];
@@ -679,6 +683,7 @@ mod tests {
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
             repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Backquote];
@@ -695,6 +700,7 @@ mod tests {
             state: ButtonState::Released,
             window: Entity::PLACEHOLDER,
             repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Backquote];

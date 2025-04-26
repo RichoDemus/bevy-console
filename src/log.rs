@@ -6,7 +6,7 @@ use std::{
 use bevy::{
     app::{App, Update},
     log::tracing_subscriber::{self, EnvFilter, Layer, Registry},
-    prelude::{EventWriter, IntoSystemConfigs, ResMut, Resource},
+    prelude::{EventWriter, IntoScheduleConfigs, ResMut, Resource},
 };
 
 use crate::{ConsoleSet, PrintConsoleLine};
@@ -51,7 +51,7 @@ pub fn send_log_buffer_to_console(
     // read and clean buffer
     let buffer = buffer.get_mut();
     for line in buffer.lines().map_while(Result::ok) {
-        console_lines.send(PrintConsoleLine { line });
+        console_lines.write(PrintConsoleLine { line });
     }
     buffer.clear();
 }
@@ -99,23 +99,20 @@ fn setup_layer(
         send_log_buffer_to_console.in_set(ConsoleSet::PostCommands),
     );
 
-    let layer: Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>;
-    layer = if let Some(filter) = filter {
-        // Layer::with_filter() returns a different impl, thus the split
-        Box::new(
+    let layer: Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync> = match filter {
+        Some(filter) => Box::new(
             tracing_subscriber::fmt::Layer::new()
                 .with_target(false)
                 .with_ansi(true)
                 .with_writer(move || BevyLogBufferWriter(buffer.clone()))
                 .with_filter(filter),
-        )
-    } else {
-        Box::new(
+        ),
+        None => Box::new(
             tracing_subscriber::fmt::Layer::new()
                 .with_target(false)
                 .with_ansi(true)
                 .with_writer(move || BevyLogBufferWriter(buffer.clone())),
-        )
+        ),
     };
 
     Some(layer)

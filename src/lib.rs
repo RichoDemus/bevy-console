@@ -77,7 +77,9 @@ impl Plugin for ConsolePlugin {
         // Don't initialize an egui plugin if one already exists.
         // This can happen if another plugin is using egui and was installed before us.
         if !app.is_plugin_added::<EguiPlugin>() {
-            app.add_plugins(EguiPlugin);
+            app.add_plugins(EguiPlugin {
+                enable_multipass_for_primary_context: true,
+            });
         }
     }
 }
