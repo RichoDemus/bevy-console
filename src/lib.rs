@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 pub use bevy_console_derive::ConsoleCommand;
-use bevy_egui::EguiPlugin;
+use bevy_egui::{EguiContextPass, EguiPlugin};
 
 use crate::commands::clear::{clear_command, ClearCommand};
 use crate::commands::exit::{exit_command, ExitCommand};
@@ -58,14 +58,14 @@ impl Plugin for ConsolePlugin {
             .add_console_command::<ExitCommand, _>(exit_command)
             .add_console_command::<HelpCommand, _>(help_command)
             .add_systems(
-                Update,
+                EguiContextPass,
                 (
                     console_ui.in_set(ConsoleSet::ConsoleUI),
                     receive_console_line.in_set(ConsoleSet::PostCommands),
                 ),
             )
             .configure_sets(
-                Update,
+                EguiContextPass,
                 (
                     ConsoleSet::Commands
                         .after(ConsoleSet::ConsoleUI)
