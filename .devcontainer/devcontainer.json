@@ -1,11 +1,12 @@
 {
     "name": "Rust Development Environment",
-    "image": "mcr.microsoft.com/devcontainers/rust:latest",
+    "image": "rust:latest",
     "customizations": {
         "vscode": {
             "extensions": [
                 "rust-lang.rust-analyzer"
             ]
         }
-    }
+    },
+    "postCreateCommand": "apt-get update && apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0"
 }
