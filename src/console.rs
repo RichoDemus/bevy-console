@@ -191,17 +191,30 @@ pub struct ConsoleCommandEntered {
     pub args: Vec<String>,
 }
 
+/// Resource representing the Last Console Line
+#[derive(Resource, Debug, Clone, Eq, PartialEq, Default)]
+pub struct LastConsoleLine{
+    pub line: String
+}
+
 /// Events to print to the console.
 #[derive(Clone, Debug, Eq, Event, PartialEq)]
 pub struct PrintConsoleLine {
     /// Console line
     pub line: String,
+    /// Whether the line should print
+    pub should_print: bool
 }
 
 impl PrintConsoleLine {
     /// Creates a new console line to print.
     pub const fn new(line: String) -> Self {
-        Self { line }
+        Self { line, should_print: true }
+    }
+
+    /// Creates a new console line which doesn't print.
+    pub const fn quiet(line: String) -> Self{
+        Self { line, should_print: false}
     }
 }
 
@@ -516,27 +529,41 @@ pub(crate) fn console_ui(
                                 state.history.pop_back();
                             }
 
-                            let mut args = Shlex::new(&state.buf).collect::<Vec<_>>();
-
-                            if !args.is_empty() {
-                                let command_name = args.remove(0);
-                                debug!("Command entered: `{command_name}`, with args: `{args:?}`");
-
-                                let command = config.commands.get(command_name.as_str());
-
-                                if command.is_some() {
-                                    command_entered
-                                        .send(ConsoleCommandEntered { command_name, args });
-                                } else {
-                                    debug!(
-                                        "Command not recognized, recognized commands: `{:?}`",
-                                        config.commands.keys().collect::<Vec<_>>()
-                                    );
-
-                                    state.scrollback.push("error: Invalid command".into());
+                            //Use Shlex to Get Commands to Run
+                            let mut commands_to_run: Vec<Vec<String>> = vec![Vec::new()];
+                            for arg in Shlex::new(&state.buf){
+                                if arg == "|"{
+                                    commands_to_run.push(Vec::new());
+                                }else{
+                                    commands_to_run.last_mut().unwrap().push(arg);
                                 }
                             }
 
+                            //Get the first bad command that is not registered
+                            if let Some(bad_command) = commands_to_run.iter().find_map(|command_to_run| {
+                                if !command_to_run.is_empty() && config.commands.get(command_to_run.first().unwrap().as_str()).is_none() {
+                                    Some(command_to_run.first().unwrap())
+                                } else {
+                                    None
+                                }
+                            }) {
+                                debug!(
+                                    "Command not recognized: {}, recognized commands: `{:?}`",
+                                    bad_command,
+                                    config.commands.keys().collect::<Vec<_>>()
+                                );
+
+                                state.scrollback.push("error: Invalid command".into());
+                            } else {
+                                for mut command_args in commands_to_run{
+                                    if !command_args.is_empty(){
+                                        let command_name = command_args.remove(0);
+                                        debug!("Command entered: `{command_name}`, with args: `{command_args:?}`");
+                                        command_entered
+                                            .send(ConsoleCommandEntered { command_name, args: command_args });
+                                    }
+                                }
+                            }
                             state.buf.clear();
                         }
                     }
@@ -586,10 +613,14 @@ pub(crate) fn console_ui(
 pub(crate) fn receive_console_line(
     mut console_state: ResMut<ConsoleState>,
     mut events: EventReader<PrintConsoleLine>,
+    mut last_line: ResMut<LastConsoleLine>
 ) {
     for event in events.read() {
         let event: &PrintConsoleLine = event;
-        console_state.scrollback.push(event.line.clone());
+        if event.should_print{
+            console_state.scrollback.push(event.line.clone());
+        }
+        last_line.line = event.line.clone();
     }
 }
 

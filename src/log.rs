@@ -51,7 +51,7 @@ pub fn send_log_buffer_to_console(
     // read and clean buffer
     let buffer = buffer.get_mut();
     for line in buffer.lines().map_while(Result::ok) {
-        console_lines.send(PrintConsoleLine { line });
+        console_lines.send(PrintConsoleLine::new(line));
     }
     buffer.clear();
 }
