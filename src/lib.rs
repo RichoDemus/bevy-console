@@ -4,6 +4,7 @@
 use bevy::prelude::*;
 pub use bevy_console_derive::ConsoleCommand;
 use bevy_egui::EguiPlugin;
+use console::LastConsoleLine;
 
 use crate::commands::clear::{clear_command, ClearCommand};
 use crate::commands::exit::{exit_command, ExitCommand};
@@ -52,6 +53,7 @@ impl Plugin for ConsolePlugin {
         app.init_resource::<ConsoleConfiguration>()
             .init_resource::<ConsoleState>()
             .init_resource::<ConsoleOpen>()
+            .init_resource::<LastConsoleLine>()
             .add_event::<ConsoleCommandEntered>()
             .add_event::<PrintConsoleLine>()
             .add_console_command::<ClearCommand, _>(clear_command)
