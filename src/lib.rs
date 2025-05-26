@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 pub use bevy_console_derive::ConsoleCommand;
-use bevy_egui::{EguiPlugin, EguiSet, EguiContextPass, EguiPlugin};
+use bevy_egui::{EguiPlugin, EguiSet, EguiContextPass};
 use console::{ConsoleCache, block_keyboard_input, block_mouse_input};
 use trie_rs::TrieBuilder;
 
