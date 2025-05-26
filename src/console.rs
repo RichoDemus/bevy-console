@@ -246,6 +246,10 @@ pub struct ConsoleConfiguration {
     pub foreground_color: Color32,
     /// Number of suggested commands to show
     pub num_suggestions: usize,
+    /// Blocks mouse from clicking through console
+    pub block_mouse: bool,
+    /// Blocks keyboard from interacting outside console when active
+    pub block_keyboard: bool,
     /// Custom completion sequences,
     /// for example [vec!["custom", "foo"]], will complete `custom foo` when typing `custom`
     pub arg_completions: Vec<Vec<String>>,
@@ -280,6 +284,8 @@ impl Default for ConsoleConfiguration {
             background_color: Color32::from_black_alpha(102),
             foreground_color: Color32::LIGHT_GRAY,
             num_suggestions: 4,
+            block_mouse: false,
+            block_keyboard: false,
             arg_completions: Default::default(),
         }
     }
@@ -305,6 +311,8 @@ impl Clone for ConsoleConfiguration {
             background_color: Color32::from_black_alpha(102),
             foreground_color: Color32::LIGHT_GRAY,
             num_suggestions: 4,
+            block_mouse: self.block_mouse,
+            block_keyboard: self.block_keyboard,
         }
     }
 }
@@ -744,6 +752,42 @@ fn set_cursor_pos(ctx: &Context, id: Id, pos: usize) {
             .cursor
             .set_char_range(Some(CCursorRange::one(CCursor::new(pos))));
         state.store(ctx, id);
+    }
+}
+
+pub fn block_mouse_input(
+    mut mouse: ResMut<ButtonInput<MouseButton>>,
+    config: Res<ConsoleConfiguration>,
+    mut contexts: EguiContexts,
+) {
+    if !config.block_mouse {
+        return;
+    }
+
+    let Some(context) = contexts.try_ctx_mut() else {
+        return;
+    };
+
+    if context.is_pointer_over_area() || context.wants_pointer_input() {
+        mouse.reset_all();
+    }
+}
+
+pub fn block_keyboard_input(
+    mut keyboard_keycode: ResMut<ButtonInput<KeyCode>>,
+    config: Res<ConsoleConfiguration>,
+    mut contexts: EguiContexts,
+) {
+    if !config.block_keyboard {
+        return;
+    }
+
+    let Some(context) = contexts.try_ctx_mut() else {
+        return;
+    };
+
+    if context.wants_keyboard_input() {
+        keyboard_keycode.reset_all();
     }
 }
 

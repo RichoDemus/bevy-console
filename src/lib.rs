@@ -3,8 +3,8 @@
 
 use bevy::prelude::*;
 pub use bevy_console_derive::ConsoleCommand;
-use bevy_egui::{EguiContextPass, EguiPlugin};
-use console::ConsoleCache;
+use bevy_egui::{EguiContextPass, EguiPlugin, EguiPreUpdateSet};
+use console::{block_keyboard_input, block_mouse_input, ConsoleCache};
 use trie_rs::TrieBuilder;
 
 use crate::commands::clear::{clear_command, ClearCommand};
@@ -79,6 +79,12 @@ impl Plugin for ConsolePlugin {
             .add_console_command::<HelpCommand, _>(help_command)
             // after per-command startup
             .add_systems(Startup, init.after(ConsoleSet::Startup))
+            .add_systems(
+                PreUpdate,
+                (block_mouse_input, block_keyboard_input)
+                    .after(EguiPreUpdateSet::ProcessInput)
+                    .before(EguiPreUpdateSet::BeginPass),
+            )
             .add_systems(
                 EguiContextPass,
                 (
