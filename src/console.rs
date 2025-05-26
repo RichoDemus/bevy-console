@@ -4,8 +4,8 @@ use bevy::ecs::{
     system::{ScheduleSystem, SystemMeta, SystemParam},
     world::unsafe_world_cell::UnsafeWorldCell,
 };
-use bevy::platform::hash::{DefaultHasher, FixedState};
-use bevy::{input::keyboard::KeyboardInput, platform::collections::HashMap, prelude::*};
+use bevy::platform::hash::FixedState;
+use bevy::{input::keyboard::KeyboardInput, prelude::*};
 use bevy_egui::egui::{self, Align, ScrollArea, TextEdit};
 use bevy_egui::egui::{text::LayoutJob, text_selection::CCursorRange};
 use bevy_egui::egui::{Context, Id};
@@ -17,10 +17,10 @@ use clap::{CommandFactory, FromArgMatches};
 use core::str;
 use shlex::Shlex;
 use std::collections::{BTreeMap, VecDeque};
-use std::hash::{BuildHasher, Hash, Hasher};
+use std::hash::BuildHasher;
 use std::marker::PhantomData;
 use std::mem;
-use trie_rs::{Trie, TrieBuilder};
+use trie_rs::Trie;
 
 use crate::{
     color::{parse_ansi_styled_str, TextFormattingOverride},
@@ -481,7 +481,7 @@ pub(crate) fn console_ui(
     mut cache: ResMut<ConsoleCache>,
     mut keyboard_input_events: EventReader<KeyboardInput>,
     mut state: ResMut<ConsoleState>,
-    mut command_entered: EventWriter<ConsoleCommandEntered>,
+    command_entered: EventWriter<ConsoleCommandEntered>,
     mut console_open: ResMut<ConsoleOpen>,
 ) {
     let keyboard_input_events = keyboard_input_events.read().collect::<Vec<_>>();
