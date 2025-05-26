@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 pub use bevy_console_derive::ConsoleCommand;
-use bevy_egui::{EguiPlugin, EguiSet, EguiContextPass};
+use bevy_egui::{EguiPlugin, EguiPreUpdateSet, EguiContextPass};
 use console::{ConsoleCache, block_keyboard_input, block_mouse_input};
 use trie_rs::TrieBuilder;
 
@@ -81,7 +81,7 @@ impl Plugin for ConsolePlugin {
             .add_systems(Startup, init.after(ConsoleSet::Startup))
             .add_systems(PreUpdate,
                 (block_mouse_input, block_keyboard_input)
-                .after(EguiSet::ProcessInput).before(EguiSet::BeginPass))
+                .after(EguiPreUpdateSet::ProcessInput).before(EguiPreUpdateSet::BeginPass))
             .add_systems(
                 EguiContextPass,
                 (
