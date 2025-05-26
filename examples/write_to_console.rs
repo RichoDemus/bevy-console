@@ -13,5 +13,5 @@ fn main() {
 }
 
 fn write_to_console(mut console_line: EventWriter<PrintConsoleLine>) {
-    console_line.send(PrintConsoleLine::new("Hello".into()));
+    console_line.write(PrintConsoleLine::new("Hello".into()));
 }
