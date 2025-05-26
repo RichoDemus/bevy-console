@@ -1,10 +1,11 @@
+use bevy::ecs::resource::Resource;
 use bevy::ecs::{
     component::Tick,
-    system::{SystemMeta, SystemParam, ScheduleSystem},
+    system::{ScheduleSystem, SystemMeta, SystemParam},
     world::unsafe_world_cell::UnsafeWorldCell,
 };
-use bevy::ecs::resource::Resource;
-use bevy::{input::keyboard::KeyboardInput, prelude::*, platform::collections::HashMap};
+use bevy::platform::hash::{DefaultHasher, FixedState};
+use bevy::{input::keyboard::KeyboardInput, platform::collections::HashMap, prelude::*};
 use bevy_egui::egui::{self, Align, ScrollArea, TextEdit};
 use bevy_egui::egui::{text::LayoutJob, text_selection::CCursorRange};
 use bevy_egui::egui::{Context, Id};
@@ -12,14 +13,19 @@ use bevy_egui::{
     egui::{epaint::text::cursor::CCursor, Color32, FontId, TextFormat},
     EguiContexts,
 };
-use clap::{builder::StyledStr, CommandFactory, FromArgMatches};
+use clap::{CommandFactory, FromArgMatches};
+use core::str;
 use shlex::Shlex;
-use trie_rs::{Trie, TrieBuilder};
 use std::collections::{BTreeMap, VecDeque};
+use std::hash::{BuildHasher, Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
+use trie_rs::{Trie, TrieBuilder};
 
-use crate::ConsoleSet;
+use crate::{
+    color::{parse_ansi_styled_str, TextFormattingOverride},
+    ConsoleSet,
+};
 
 type ConsoleCommandEnteredReaderSystemParam = EventReader<'static, 'static, ConsoleCommandEntered>;
 
@@ -66,7 +72,7 @@ pub struct ConsoleCommand<'w, T> {
     console_line: EventWriter<'w, PrintConsoleLine>,
 }
 
-impl<'w, T> ConsoleCommand<'w, T> {
+impl<T> ConsoleCommand<'_, T> {
     /// Returns Some(T) if the command was executed and arguments were valid.
     ///
     /// This method should only be called once.
@@ -77,7 +83,8 @@ impl<'w, T> ConsoleCommand<'w, T> {
 
     /// Print `[ok]` in the console.
     pub fn ok(&mut self) {
-        self.console_line.write(PrintConsoleLine::new("[ok]".into()));
+        self.console_line
+            .write(PrintConsoleLine::new("[ok]".into()));
     }
 
     /// Print `[failed]` in the console.
@@ -89,14 +96,14 @@ impl<'w, T> ConsoleCommand<'w, T> {
     /// Print a reply in the console.
     ///
     /// See [`reply!`](crate::reply) for usage with the [`format!`] syntax.
-    pub fn reply(&mut self, msg: impl Into<StyledStr>) {
+    pub fn reply(&mut self, msg: impl Into<String>) {
         self.console_line.write(PrintConsoleLine::new(msg.into()));
     }
 
     /// Print a reply in the console followed by `[ok]`.
     ///
     /// See [`reply_ok!`](crate::reply_ok) for usage with the [`format!`] syntax.
-    pub fn reply_ok(&mut self, msg: impl Into<StyledStr>) {
+    pub fn reply_ok(&mut self, msg: impl Into<String>) {
         self.console_line.write(PrintConsoleLine::new(msg.into()));
         self.ok();
     }
@@ -104,7 +111,7 @@ impl<'w, T> ConsoleCommand<'w, T> {
     /// Print a reply in the console followed by `[failed]`.
     ///
     /// See [`reply_failed!`](crate::reply_failed) for usage with the [`format!`] syntax.
-    pub fn reply_failed(&mut self, msg: impl Into<StyledStr>) {
+    pub fn reply_failed(&mut self, msg: impl Into<String>) {
         self.console_line.write(PrintConsoleLine::new(msg.into()));
         self.failed();
     }
@@ -167,7 +174,7 @@ unsafe impl<T: Command> SystemParam for ConsoleCommand<'_, T> {
                         return Some(T::from_arg_matches(&matches));
                     }
                     Err(err) => {
-                        console_line.write(PrintConsoleLine::new(err.render()));
+                        console_line.write(PrintConsoleLine::new(err.to_string()));
                         return Some(Err(err));
                     }
                 }
@@ -194,12 +201,12 @@ pub struct ConsoleCommandEntered {
 #[derive(Clone, Debug, Eq, Event, PartialEq)]
 pub struct PrintConsoleLine {
     /// Console line
-    pub line: StyledStr,
+    pub line: String,
 }
 
 impl PrintConsoleLine {
     /// Creates a new console line to print.
-    pub const fn new(line: StyledStr) -> Self {
+    pub const fn new(line: String) -> Self {
         Self { line }
     }
 }
@@ -223,11 +230,35 @@ pub struct ConsoleConfiguration {
     pub history_size: usize,
     /// Line prefix symbol
     pub symbol: String,
-    /// Custom argument completions for commands.
-    /// Key is the command, entries are potential completions.
-    pub arg_completions: HashMap<String, Vec<String>>,
+    /// allows window to be collpased
+    pub collapsible: bool,
+    /// Title name of console window
+    pub title_name: String,
+    /// allows window to be resizable
+    pub resizable: bool,
+    /// allows window to be movable
+    pub moveable: bool,
+    /// show the title bar or not
+    pub show_title_bar: bool,
+    /// Background color of console window  
+    pub background_color: Color32,
+    /// Foreground (text) color
+    pub foreground_color: Color32,
+    /// Number of suggested commands to show
+    pub num_suggestions: usize,
+    /// Custom completion sequences,
+    /// for example [vec!["custom", "foo"]], will complete `custom foo` when typing `custom`
+    pub arg_completions: Vec<Vec<String>>,
+}
+
+#[derive(Resource, Default)]
+pub struct ConsoleCache {
     /// Trie used for completions, autogenerated from registered console commands
-    commands_trie: Trie<u8>,
+    /// this probably should operate over references to save memory, but this is convenient for now
+    pub(crate) commands_trie: Option<Trie<u8>>,
+    pub(crate) predictions_hash_key: Option<u64>,
+    pub(crate) predictions_cache: Vec<String>,
+    pub(crate) prediction_matches_buffer: bool,
 }
 
 impl Default for ConsoleConfiguration {
@@ -241,8 +272,15 @@ impl Default for ConsoleConfiguration {
             commands: BTreeMap::new(),
             history_size: 20,
             symbol: "$ ".to_owned(),
-            arg_completions: HashMap::new(),
-            commands_trie: TrieBuilder::new().build(),
+            collapsible: false,
+            title_name: "Console".to_string(),
+            resizable: true,
+            moveable: true,
+            show_title_bar: true,
+            background_color: Color32::from_black_alpha(102),
+            foreground_color: Color32::LIGHT_GRAY,
+            num_suggestions: 4,
+            arg_completions: Default::default(),
         }
     }
 }
@@ -251,15 +289,22 @@ impl Clone for ConsoleConfiguration {
     fn clone(&self) -> ConsoleConfiguration {
         ConsoleConfiguration {
             keys: self.keys.clone(),
-            left_pos: self.left_pos.clone(),
-            top_pos: self.top_pos.clone(),
-            height: self.height.clone(),
-            width: self.width.clone(),
+            left_pos: self.left_pos,
+            top_pos: self.top_pos,
+            height: self.height,
+            width: self.width,
             commands: self.commands.clone(),
-            history_size: self.history_size.clone(),
+            history_size: self.history_size,
             symbol: self.symbol.clone(),
             arg_completions: self.arg_completions.clone(),
-            commands_trie: TrieBuilder::new().build(),
+            collapsible: false,
+            title_name: "Console".to_string(),
+            resizable: true,
+            moveable: true,
+            show_title_bar: true,
+            background_color: Color32::from_black_alpha(102),
+            foreground_color: Color32::LIGHT_GRAY,
+            num_suggestions: 4,
         }
     }
 }
@@ -310,15 +355,7 @@ impl AddConsoleCommand for App {
             config.commands.insert(name, command);
         };
 
-        let build_command_trie = move |mut config: ResMut<ConsoleConfiguration>| {
-            let mut trie_builder = TrieBuilder::new();
-            for cmd in config.commands.keys() {
-                trie_builder.push(cmd);
-            }
-            config.commands_trie = trie_builder.build();
-        };
-
-        self.add_systems(Startup, (sys, build_command_trie).chain())
+        self.add_systems(Startup, sys.in_set(ConsoleSet::Startup))
             .add_systems(Update, system.in_set(ConsoleSet::Commands))
     }
 }
@@ -333,10 +370,10 @@ pub struct ConsoleOpen {
 #[derive(Resource)]
 pub(crate) struct ConsoleState {
     pub(crate) buf: String,
-    pub(crate) scrollback: Vec<StyledStr>,
-    pub(crate) history: VecDeque<StyledStr>,
+    pub(crate) scrollback: Vec<String>,
+    pub(crate) history: VecDeque<String>,
     pub(crate) history_index: usize,
-    pub(crate) completions: Vec<String>,
+    pub(crate) suggestion_index: Option<usize>,
 }
 
 impl Default for ConsoleState {
@@ -344,9 +381,96 @@ impl Default for ConsoleState {
         ConsoleState {
             buf: String::default(),
             scrollback: Vec::new(),
-            history: VecDeque::from([StyledStr::new()]),
+            history: VecDeque::from([String::new()]),
             history_index: 0,
-            completions: Vec::new(),
+            suggestion_index: None,
+        }
+    }
+}
+
+fn default_style(config: &ConsoleConfiguration) -> TextFormat {
+    TextFormat::simple(FontId::monospace(14f32), config.foreground_color)
+}
+
+fn style_ansi_text(str: &str, config: &ConsoleConfiguration) -> LayoutJob {
+    let mut layout_job = LayoutJob::default();
+    for (str, overrides) in parse_ansi_styled_str(str).into_iter() {
+        let mut current_style = default_style(config);
+
+        for o in overrides {
+            match o {
+                TextFormattingOverride::Bold => current_style.font_id.size = 16f32, // no support for bold font families in egui TODO: when egui supports bold font families, use them here
+                TextFormattingOverride::Dim => {
+                    // no support for dim font families in egui TODO: when egui supports dim font families, use them here
+                    current_style.color = current_style.color.gamma_multiply(0.5);
+                }
+                TextFormattingOverride::Italic => current_style.italics = true,
+                TextFormattingOverride::Underline => {
+                    current_style.underline = egui::Stroke::new(1., config.foreground_color)
+                }
+                TextFormattingOverride::Strikethrough => {
+                    current_style.strikethrough = egui::Stroke::new(1., config.foreground_color)
+                }
+                TextFormattingOverride::Foreground(c) => current_style.color = c,
+                TextFormattingOverride::Background(c) => current_style.background = c,
+                _ => {}
+            }
+        }
+
+        if !str.is_empty() {
+            layout_job.append(str, 0f32, current_style.clone());
+        }
+    }
+    layout_job
+}
+
+/// Recompute predictions for the console based on the current buffer content.
+/// if the buffer does not change the predictions are not recomputed.
+pub(crate) fn recompute_predictions(
+    state: &mut ConsoleState,
+    cache: &mut ConsoleCache,
+    suggestion_count: usize,
+) {
+    if state.buf.is_empty() {
+        cache.predictions_cache.clear();
+        cache.predictions_hash_key = None;
+        cache.prediction_matches_buffer = false;
+        state.suggestion_index = None;
+        return;
+    }
+
+    let hash = FixedState::with_seed(42).hash_one(&state.buf);
+
+    let recompute = if let Some(predictions_hash_key) = cache.predictions_hash_key {
+        predictions_hash_key != hash
+    } else {
+        true
+    };
+
+    if recompute {
+        let words = Shlex::new(&state.buf).collect::<Vec<_>>();
+
+        let suggestions = match &cache.commands_trie {
+            Some(trie) => trie
+                .predictive_search(words.join(" "))
+                .into_iter()
+                .take(suggestion_count)
+                .collect(),
+            None => vec![],
+        };
+        cache.predictions_cache = suggestions
+            .into_iter()
+            .map(|s| String::from_utf8(s).unwrap_or_default())
+            .collect();
+
+        cache.predictions_hash_key = Some(hash);
+        state.suggestion_index = None;
+        cache.prediction_matches_buffer = false;
+
+        if let Some(first) = cache.predictions_cache.first() {
+            if cache.predictions_cache.len() == 1 && first == &state.buf {
+                cache.prediction_matches_buffer = true
+            }
         }
     }
 }
@@ -354,13 +478,20 @@ impl Default for ConsoleState {
 pub(crate) fn console_ui(
     mut egui_context: EguiContexts,
     config: Res<ConsoleConfiguration>,
+    mut cache: ResMut<ConsoleCache>,
     mut keyboard_input_events: EventReader<KeyboardInput>,
     mut state: ResMut<ConsoleState>,
     mut command_entered: EventWriter<ConsoleCommandEntered>,
     mut console_open: ResMut<ConsoleOpen>,
 ) {
     let keyboard_input_events = keyboard_input_events.read().collect::<Vec<_>>();
-    let ctx = egui_context.ctx_mut();
+
+    // If there is no egui context, return, this can happen when exiting the app
+    let ctx = if let Some(ctxt) = egui_context.try_ctx_mut() {
+        ctxt
+    } else {
+        return;
+    };
 
     let pressed = keyboard_input_events
         .iter()
@@ -373,15 +504,27 @@ pub(crate) fn console_ui(
     }
 
     if console_open.open {
-        egui::Window::new("Console")
-            .collapsible(false)
+        // Recompute predictions if the buffer changed
+        recompute_predictions(&mut state, &mut cache, config.num_suggestions);
+
+        egui::Window::new(&config.title_name)
+            .collapsible(config.collapsible)
             .default_pos([config.left_pos, config.top_pos])
             .default_size([config.width, config.height])
-            .resizable(true)
+            .resizable(config.resizable)
+            .movable(config.moveable)
+            .title_bar(config.show_title_bar)
+            .frame(egui::Frame {
+                fill: config.background_color,
+                ..Default::default()
+            })
             .show(ctx, |ui| {
-                ui.vertical(|ui| {
-                    let scroll_height = ui.available_height() - 30.0;
+                ui.style_mut().visuals.extreme_bg_color = config.background_color;
+                ui.style_mut().visuals.override_text_color = Some(config.foreground_color);
 
+                ui.vertical(|ui| {
+                    const WRITE_AREA_HEIGHT: f32 = 30.0;
+                    let scroll_height = ui.available_height() - WRITE_AREA_HEIGHT;
                     // Scroll area
                     ScrollArea::vertical()
                         .auto_shrink([false, false])
@@ -390,15 +533,7 @@ pub(crate) fn console_ui(
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 for line in &state.scrollback {
-                                    let mut text = LayoutJob::default();
-
-                                    text.append(
-                                        &line.to_string(), //TOOD: once clap supports custom styling use it here
-                                        0f32,
-                                        TextFormat::simple(FontId::monospace(14f32), Color32::GRAY),
-                                    );
-
-                                    ui.label(text);
+                                    ui.label(style_ansi_text(line, &config));
                                 }
                             });
 
@@ -412,15 +547,13 @@ pub(crate) fn console_ui(
                     ui.separator();
 
                     // Clear line on ctrl+c
-                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::C))
-                    {
+                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::C)) {
                         state.buf.clear();
                         return;
                     }
-                    
+
                     // Clear history on ctrl+l
-                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::L))
-                    {
+                    if ui.input(|i| i.modifiers.ctrl & i.key_pressed(egui::Key::L)) {
                         state.scrollback.clear();
                         return;
                     }
@@ -431,119 +564,50 @@ pub(crate) fn console_ui(
                         .lock_focus(true)
                         .font(egui::TextStyle::Monospace);
 
-                    // Handle enter
                     let text_edit_response = ui.add(text_edit);
-                    if text_edit_response.lost_focus()
-                        && ui.input(|i| i.key_pressed(egui::Key::Enter))
+
+                    // show a few suggestions
+                    if text_edit_response.has_focus()
+                        && !state.buf.is_empty()
+                        && !cache.prediction_matches_buffer
                     {
-                        if state.buf.trim().is_empty() {
-                            state.scrollback.push(StyledStr::new());
-                        } else {
-                            let msg = format!("{}{}", config.symbol, state.buf);
-                            state.scrollback.push(msg.into());
-                            let cmd_string = state.buf.clone();
-                            state.history.insert(1, cmd_string.into());
-                            if state.history.len() > config.history_size + 1 {
-                                state.history.pop_back();
-                            }
-                            state.history_index = 0;
+                        // create the area to show suggestions
+                        let suggestions_area = egui::Area::new(ui.auto_id_with("suggestions"))
+                            .fixed_pos(ui.next_widget_position())
+                            .movable(false);
 
-                            let mut args = Shlex::new(&state.buf).collect::<Vec<_>>();
+                        suggestions_area.show(ui.ctx(), |ui| {
+                            ui.set_min_width(config.width);
 
-                            if !args.is_empty() {
-                                let command_name = args.remove(0);
-                                debug!("Command entered: `{command_name}`, with args: `{args:?}`");
+                            for (i, suggestion) in cache.predictions_cache.iter().enumerate() {
+                                let mut layout_job = egui::text::LayoutJob::default();
+                                let is_highlighted = Some(i) == state.suggestion_index;
 
-                                let command = config.commands.get(command_name.as_str());
+                                let mut style = TextFormat {
+                                    font_id: FontId::new(14.0, egui::FontFamily::Monospace),
+                                    color: Color32::WHITE,
+                                    ..default()
+                                };
 
-                                if command.is_some() {
-                                    command_entered
-                                        .write(ConsoleCommandEntered { command_name, args });
-                                } else {
-                                    debug!(
-                                        "Command not recognized, recognized commands: `{:?}`",
-                                        config.commands.keys().collect::<Vec<_>>()
-                                    );
-
-                                    state.scrollback.push("error: Invalid command".into());
+                                if is_highlighted {
+                                    style.underline = egui::Stroke::new(1., Color32::WHITE);
+                                    style.background = Color32::from_black_alpha(128);
                                 }
-                            }
 
-                            state.buf.clear();
-                        }
+                                layout_job.append(suggestion, 0.0, style);
+                                ui.label(layout_job);
+                            }
+                        });
                     }
 
-                    // Autocomplete line on tab
-                    if ui.input(|i| i.key_pressed(egui::Key::Tab))
-                    {
-                        let line_words: Vec<&str> = state.buf.split_whitespace().collect();
-                        let target_word = line_words.last().unwrap_or(&"").to_string();
-                        let target_is_arg: bool = state.buf.contains(' ');
-
-                        if state.completions.contains(&target_word) { // continue cycling through potential completions
-                            let i = state.completions.iter().position(|x| x == &target_word).unwrap();
-                            let full_word = match state.completions.get(i + 1) {
-                                Some(x) => x.to_string(),
-                                None => state.completions[0].to_string(),
-                            };
-                            let full_line = line_words.iter()
-                                .enumerate()
-                                .filter(|(i, _)| i != &(line_words.len() - 1))
-                                .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
-                                + &full_word;
-                            state.buf = full_line;
-                        } else if target_is_arg { // create completion list for arguments
-                            let Some(cmd) = line_words.get(0) else { return; };
-                            let Some(arg_completions) = config.arg_completions.get(*cmd) else { return; };
-
-                            if state.buf.ends_with(' ') {
-                                if !arg_completions.is_empty() {
-                                    let full_line = line_words.iter()
-                                        .enumerate()
-                                        .filter(|(i, _)| i != &(line_words.len()))
-                                        .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
-                                        + &arg_completions[0];
-                                    state.completions = arg_completions.clone();
-                                    state.buf = full_line;
-                                }
-                            } else {
-                                let mut trie_builder = TrieBuilder::new();
-                                arg_completions.iter().for_each(|x| trie_builder.push(x));
-                                let search = trie_builder.build().predictive_search(&target_word);
-                                let completions: Vec<&str> = search.iter()
-                                    .map(|x| std::str::from_utf8(x).unwrap())
-                                    .collect();
-                                if !completions.is_empty() {
-                                    let full_line = line_words.iter()
-                                        .enumerate()
-                                        .filter(|(i, _)| i != &(line_words.len() - 1))
-                                        .fold(String::new(), |acc, (_, x)| acc + &x + &" ")
-                                        + &completions[0];
-                                    state.completions = completions.iter().map(|x| x.to_string()).collect();
-                                    state.buf = full_line;
-                                }
-                            };
-                        } else { // create completion list for commands
-                            if target_word == "" {
-                                // separate logic, as trie_rs::Trie::predictive_search runtime panics on empty strings
-                                state.completions = config.commands.keys().map(|x| x.to_string()).collect();
-                                state.buf = state.completions[0].to_string();
-                            } else {
-                                let search = config.commands_trie.predictive_search(&target_word);
-                                let completions: Vec<&str> = search.iter()
-                                    .map(|x| std::str::from_utf8(x).unwrap())
-                                    .collect();
-                                if !completions.is_empty() {
-                                    state.completions = completions.iter().map(|x| x.to_string()).collect();
-                                    state.buf = completions[0].to_string();
-                                }
-                            }
-                        } 
-                    } else if ui.input(|i| !i.key_down(egui::Key::Tab) & !i.keys_down.is_empty()) {
-                        // User pressed a key that isn't Tab.
-                        // We reset the completion list, so that if they press tab later, we always regenerate a new completions list.
-                        state.completions = Vec::new();
-                    }
+                    handle_enter(
+                        config,
+                        &cache,
+                        &mut state,
+                        command_entered,
+                        ui,
+                        &text_edit_response,
+                    );
 
                     // Handle up and down through history
                     if text_edit_response.has_focus()
@@ -552,7 +616,7 @@ pub(crate) fn console_ui(
                         && state.history_index < state.history.len() - 1
                     {
                         if state.history_index == 0 && !state.buf.trim().is_empty() {
-                            *state.history.get_mut(0).unwrap() = state.buf.clone().into();
+                            *state.history.get_mut(0).unwrap() = state.buf.clone();
                         }
 
                         state.history_index += 1;
@@ -571,10 +635,82 @@ pub(crate) fn console_ui(
                         set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
                     }
 
+                    // handle tab cycling through suggestions
+                    if ui.input(|i| i.key_pressed(egui::Key::Tab))
+                        && !cache.predictions_cache.is_empty()
+                    {
+                        match &mut state.suggestion_index {
+                            Some(index) => {
+                                *index = (*index + 1) % cache.predictions_cache.len();
+                            }
+                            None => {
+                                state.suggestion_index = Some(0);
+                            }
+                        }
+                    }
+
                     // Focus on input
                     ui.memory_mut(|m| m.request_focus(text_edit_response.id));
                 });
             });
+    }
+}
+
+fn handle_enter(
+    config: Res<'_, ConsoleConfiguration>,
+    cache: &ResMut<'_, ConsoleCache>,
+    state: &mut ResMut<'_, ConsoleState>,
+    mut command_entered: EventWriter<'_, ConsoleCommandEntered>,
+    ui: &mut egui::Ui,
+    text_edit_response: &egui::Response,
+) {
+    // Handle enter
+    if text_edit_response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        // if we have a selected suggestion
+        // replace the content of the buffer with it and set the cursor to the end
+        if let Some(index) = state.suggestion_index {
+            if index < cache.predictions_cache.len() && !cache.prediction_matches_buffer {
+                state.buf = cache.predictions_cache[index].clone();
+                state.suggestion_index = None;
+                set_cursor_pos(ui.ctx(), text_edit_response.id, state.buf.len());
+                return;
+            }
+        }
+
+        if state.buf.trim().is_empty() {
+            state.scrollback.push(String::new());
+        } else {
+            let msg = format!("{}{}", config.symbol, state.buf);
+            state.scrollback.push(msg);
+            let cmd_string = state.buf.clone();
+            state.history.insert(1, cmd_string);
+            if state.history.len() > config.history_size + 1 {
+                state.history.pop_back();
+            }
+            state.history_index = 0;
+
+            let mut args = Shlex::new(&state.buf).collect::<Vec<_>>();
+
+            if !args.is_empty() {
+                let command_name = args.remove(0);
+                debug!("Command entered: `{command_name}`, with args: `{args:?}`");
+
+                let command = config.commands.get(command_name.as_str());
+
+                if command.is_some() {
+                    command_entered.write(ConsoleCommandEntered { command_name, args });
+                } else {
+                    debug!(
+                        "Command not recognized, recognized commands: `{:?}`",
+                        config.commands.keys().collect::<Vec<_>>()
+                    );
+
+                    state.scrollback.push("error: Invalid command".into());
+                }
+            }
+
+            state.buf.clear();
+        }
     }
 }
 
@@ -625,6 +761,8 @@ mod tests {
             logical_key: Key::Unidentified(NativeKey::Xkb(41)),
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
+            repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Unidentified(NativeKeyCode::Xkb(41))];
@@ -640,6 +778,8 @@ mod tests {
             logical_key: Key::Unidentified(NativeKey::Xkb(42)),
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
+            repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Unidentified(NativeKeyCode::Xkb(41))];
@@ -655,6 +795,8 @@ mod tests {
             logical_key: Key::Character("`".into()),
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
+            repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Backquote];
@@ -670,6 +812,8 @@ mod tests {
             logical_key: Key::Character("A".into()),
             state: ButtonState::Pressed,
             window: Entity::PLACEHOLDER,
+            repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Backquote];
@@ -685,6 +829,8 @@ mod tests {
             logical_key: Key::Character("`".into()),
             state: ButtonState::Released,
             window: Entity::PLACEHOLDER,
+            repeat: false,
+            text: None,
         };
 
         let config = vec![KeyCode::Backquote];

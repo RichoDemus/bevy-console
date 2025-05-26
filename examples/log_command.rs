@@ -1,9 +1,10 @@
 use bevy::prelude::*;
-use bevy_console::{reply, AddConsoleCommand, ConsoleCommand, ConsolePlugin};
+use bevy_console::{reply, AddConsoleCommand, ConsoleCommand, ConsoleConfiguration, ConsolePlugin};
 use clap::Parser;
 
 fn main() {
     App::new()
+        // set background to red
         .add_plugins((DefaultPlugins, ConsolePlugin))
         .add_console_command::<LogCommand, _>(log_command)
         .run();
