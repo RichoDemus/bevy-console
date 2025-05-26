@@ -311,8 +311,8 @@ impl Clone for ConsoleConfiguration {
             background_color: Color32::from_black_alpha(102),
             foreground_color: Color32::LIGHT_GRAY,
             num_suggestions: 4,
-            block_mouse: self.blocks_mouse,
-            block_keyboard: self.blocks_keyboard,
+            block_mouse: self.block_mouse,
+            block_keyboard: self.block_keyboard,
         }
     }
 }
