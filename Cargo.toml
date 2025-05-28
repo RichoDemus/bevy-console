@@ -10,7 +10,10 @@ license = "MIT"
 readme = "README.md"
 
 [dependencies]
-bevy = { version = "0.16", default-features = false }
+bevy = { version = "0.16", default-features = false, features = [
+    "std",
+    "bevy_log",
+] }
 clap = { version = "4.5", features = ["derive"] }
 bevy_console_derive = { path = "./bevy_console_derive", version = "0.5.0" }
 bevy_egui = "0.34"
@@ -20,7 +23,7 @@ strip-ansi-escapes = "0.2"
 trie-rs = "0.2"
 
 [dev-dependencies]
-bevy = { version = "0.16", features = ["std"] }
+bevy = { version = "0.16", features = ["std", "bevy_log"] }
 color-print = { version = "0.3" }
 
 
