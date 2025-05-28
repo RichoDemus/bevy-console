@@ -20,7 +20,7 @@ strip-ansi-escapes = "0.2"
 trie-rs = "0.2"
 
 [dev-dependencies]
-bevy = { version = "0.16" }
+bevy = { version = "0.16", features = ["std"] }
 color-print = { version = "0.3" }
 
 
