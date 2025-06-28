@@ -457,14 +457,15 @@ pub(crate) fn recompute_predictions(
 
     if recompute {
         let words = Shlex::new(&state.buf).collect::<Vec<_>>();
+        let query = words.join(" ");
 
         let suggestions = match &cache.commands_trie {
-            Some(trie) => trie
-                .predictive_search(words.join(" "))
+            Some(trie) if !query.is_empty() => trie
+                .predictive_search(query)
                 .into_iter()
                 .take(suggestion_count)
                 .collect(),
-            None => vec![],
+            _ => vec![],
         };
         cache.predictions_cache = suggestions
             .into_iter()
